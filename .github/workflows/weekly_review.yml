@@ -1,0 +1,39 @@
+name: Weekly analytics review
+
+on:
+  schedule:
+    - cron: "0 5 * * 0"   # Sunday 05:00 UTC, the day before production
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Review
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: python run_weekly_review.py
+      - name: Commit
+        run: |
+          git config user.name "yt-autopilot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/ reports/
+          git diff --cached --quiet || git commit -m "chore: weekly review $(date -u +%F)"
+          git push
+      - name: Publish report to job summary
+        run: cat reports/latest.md >> $GITHUB_STEP_SUMMARY

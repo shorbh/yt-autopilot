@@ -1,0 +1,64 @@
+# ---------------------------------------------------------------
+# yt-autopilot configuration  (edit freely; no secrets go here)
+# Secrets live in environment variables / GitHub Secrets:
+#   GEMINI_API_KEY | GROQ_API_KEY | ANTHROPIC_API_KEY   (one is enough)
+#   PEXELS_API_KEY                                     (optional, free)
+#   YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN    (from setup_auth.py)
+# ---------------------------------------------------------------
+
+channel:
+  name: "Money Mechanics"           # change to your channel name
+  tagline: "How money actually works, explained in plain English."
+  niche: "personal finance and investing explainers for a global English-speaking audience"
+  audience: "adults 22-45 who want to understand money without jargon"
+  language: "en-US"
+  # Consistent sign-off builds brand recall (and counts as editorial identity).
+  signoff: "If this saved you a mistake, subscribe - one new money mechanic every week."
+  disclaimer: "This video is for education only and is not financial advice."
+
+voice:
+  # Run: python -m edge_tts --list-voices | findstr en-US
+  name: "en-US-AndrewMultilingualNeural"   # calm male; alt: en-US-AvaMultilingualNeural, en-GB-RyanNeural
+  rate: "+4%"
+  pitch: "+0Hz"
+
+video:
+  width: 1920
+  height: 1080
+  fps: 30
+  target_minutes: 8          # long-form target length (6-10 recommended)
+  captions: true
+  b_roll: "auto"             # auto = Pexels if PEXELS_API_KEY set, else generated slides
+  music: false               # keep false unless you add royalty-free tracks to assets/music/
+
+shorts:
+  count: 3
+  width: 1080
+  height: 1920
+  max_seconds: 58
+
+publishing:
+  # Long video publishes at first run; Shorts are scheduled through the week.
+  timezone: "America/New_York"
+  long_publish_hour: 14      # 2 PM ET = strong US daytime + India evening
+  shorts_offset_days: [1, 3, 5]
+  shorts_publish_hour: 12
+  privacy: "private"         # private + publishAt = scheduled. Use "public" to publish immediately.
+  category_id: "27"          # 27 = Education
+  made_for_kids: false
+  synthetic_media_disclosure: true   # REQUIRED for AI voice under YouTube policy
+
+llm:
+  provider: "auto"           # auto | gemini | groq | anthropic
+  gemini_model: "gemini-2.5-flash-lite"
+  groq_model: "llama-3.3-70b-versatile"
+  anthropic_model: "claude-sonnet-4-5"
+  temperature: 0.8
+
+style:
+  bg_dark: "#0B1020"
+  bg_dark2: "#1B2447"
+  accent: "#3DDC97"
+  accent2: "#FFD166"
+  text: "#FFFFFF"
+  font_bold: "assets/fonts/Inter-Bold.ttf"     # falls back to DejaVu / PIL default if missing

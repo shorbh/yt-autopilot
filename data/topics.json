@@ -1,0 +1,78 @@
+{
+  "formats": [
+    "explainer: how X actually works, step by step, with one worked numeric example",
+    "myth-bust: the popular belief, why people believe it, the math that breaks it, what to do instead",
+    "case study: two fictional people make opposite choices; follow their numbers over 10-30 years",
+    "calculator walkthrough: show the exact formula and run 3 scenarios with different inputs",
+    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
+    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs",
+    "history lesson: where this rule/product came from, what changed, what it means for you now"
+  ],
+  "categories": {
+    "investing_basics": [
+      "Index funds vs actively managed funds: the fee math over 30 years",
+      "What a 1% fee really costs you (it is not 1%)",
+      "Dollar-cost averaging vs lump sum: what the data actually says",
+      "How dividends work and why 'dividend income' can fool you",
+      "ETF vs mutual fund: the differences that matter for your money",
+      "Why 'time in the market' beats timing it, with real drawdown numbers",
+      "What bond yields are and why they move stock prices",
+      "The Rule of 72: estimate any doubling time in your head",
+      "Rebalancing: why selling winners is the boring secret of steady returns",
+      "Sequence-of-returns risk: why the year you retire matters more than your average return"
+    ],
+    "money_psychology": [
+      "Lifestyle creep: how a raise disappears and how to catch it",
+      "Why humans are wired to buy high and sell low (loss aversion, explained)",
+      "The anchoring trick behind every 'was $199, now $99' price tag",
+      "Mental accounting: why a tax refund feels like free money and what that costs you",
+      "Hedonic adaptation: why the new car stops feeling new in 3 months",
+      "Why comparing salaries with friends makes you poorer",
+      "The sunk cost fallacy in your finances: cars, degrees, subscriptions"
+    ],
+    "debt_and_credit": [
+      "How credit card interest is actually calculated (daily, not monthly)",
+      "Minimum payments: the 27-year math nobody reads",
+      "Avalanche vs snowball: which debt payoff method wins, and when it doesn't",
+      "How a credit score is built: the five factors weighted",
+      "Buy now, pay later: what the fine print costs you",
+      "Refinancing explained: when it saves thousands and when it's a trap",
+      "Why lenders love a 0% APR offer more than you do"
+    ],
+    "saving_and_budgeting": [
+      "The 50/30/20 rule: where it works and where it breaks",
+      "How much emergency fund you actually need (a formula, not a guess)",
+      "High-yield savings vs money market vs T-bills: parking cash correctly",
+      "Automating money: the one-hour setup that runs your finances for years",
+      "The latte factor is wrong; here is what actually moves the needle",
+      "Sinking funds: budgeting for the expenses that 'surprise' you every year",
+      "Zero-based budgeting vs pay-yourself-first: a decision guide"
+    ],
+    "big_life_money": [
+      "Rent vs buy: the real math including the costs people forget",
+      "How mortgage amortization works and why early payments are worth more",
+      "Leasing vs buying a car: the total-cost comparison",
+      "How much car can you afford: the 20/4/10 rule and its critics",
+      "College degree ROI: how to compute payback period before enrolling",
+      "Wedding, house, baby: sequencing big expenses without wrecking your 30s",
+      "Emergency fund vs paying debt vs investing: the order of operations"
+    ],
+    "income_and_career": [
+      "How to calculate your real hourly wage (commute, taxes, gear included)",
+      "Negotiating salary: the compounding value of a $5,000 raise at 25",
+      "Side income taxes: what freelancers get wrong in year one",
+      "Equity compensation explained: RSUs, options, vesting in plain English",
+      "The 4% rule: what it says, where it came from, and its modern critics",
+      "Coast FIRE explained with a worked example"
+    ],
+    "systems_and_history": [
+      "How banks create money when they lend (fractional reserve, simply)",
+      "What inflation really is and how it silently taxes cash",
+      "Why the stock market goes up over time (and why that isn't guaranteed)",
+      "How index funds were invented and why Wall Street hated them",
+      "What a recession is, what it does to jobs and markets, and what to do about it",
+      "How compound interest was discovered and why it feels unnatural",
+      "How central banks set interest rates and why your mortgage cares"
+    ]
+  }
+}
