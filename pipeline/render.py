@@ -25,11 +25,27 @@ def _srt_time(t: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
+def _estimate_words(narration: str, duration: float) -> list[dict]:
+    """Fallback when the TTS engine returns no word boundaries: spread words across the
+    section proportionally to their length (close enough for 2-3 word caption chunks)."""
+    toks = narration.split()
+    if not toks:
+        return []
+    weights = [len(t) + 1 for t in toks]
+    total = float(sum(weights))
+    t, out = 0.0, []
+    for tok, wgt in zip(toks, weights):
+        d = duration * wgt / total
+        out.append({"start": t, "end": t + d, "text": tok})
+        t += d
+    return out
+
+
 def build_srt(sections: list[dict], out: Path, max_words: int = 3, max_span: float = 1.6) -> Path:
     """Karaoke-style short caption chunks from edge-tts word boundaries."""
     idx, offset, lines = 1, 0.0, []
     for s in sections:
-        words = s.get("words") or []
+        words = s.get("words") or _estimate_words(s.get("narration", ""), s["duration"])
         chunk: list[dict] = []
 
         def flush():
@@ -124,17 +140,26 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
     audio = workdir / "voice.m4a"
     concat_audio([Path(s["audio"]) for s in sections], audio, GAP)
 
-    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", silent.name, "-i", audio.name]
+    base = ["ffmpeg", "-y", "-loglevel", "error", "-i", silent.name, "-i", audio.name]
+    tail = ["-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out_mp4)]
+
     if cfg["video"].get("captions", True):
         srt = build_srt(sections, workdir / "captions.srt")
+        n_words = sum(len(s.get("words") or []) for s in sections)
+        print(f"      captions: {srt.stat().st_size} bytes, {n_words} timed words from TTS"
+              + ("" if n_words else " (estimated timings used)"))
         style = (f"FontName=DejaVu Sans,FontSize={caption_size},Bold=1,PrimaryColour=&H00FFFFFF,"
                  f"OutlineColour=&H00101010,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV={110 if portrait else 40}")
-        cmd += ["-vf", f"subtitles={srt.name}:force_style='{style}'"]
-        cmd += ["-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p"]
-    else:
-        cmd += ["-c:v", "copy"]
-    cmd += ["-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out_mp4)]
-    _run(cmd, cwd=workdir)
+        cmd = base + ["-vf", f"subtitles={srt.name}:force_style='{style}'",
+                      "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p"] + tail
+        try:
+            _run(cmd, cwd=workdir)
+            return out_mp4
+        except RuntimeError as e:
+            # Captions must never kill a production run; publish without them and say so.
+            print(f"[warn] caption burn-in failed, rendering without captions: {str(e)[-400:]}")
+
+    _run(base + ["-c:v", "copy"] + tail, cwd=workdir)
     return out_mp4
 
 

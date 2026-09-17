@@ -18,12 +18,15 @@ def ffprobe_duration(path: Path) -> float:
 
 async def _synth(text: str, voice: str, rate: str, pitch: str, out_mp3: Path) -> list[dict]:
     words: list[dict] = []
-    comm = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
+    try:  # edge-tts >= 7 lets you request word-level boundaries explicitly
+        comm = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, boundary="WordBoundary")
+    except TypeError:  # older versions: word boundaries are the default
+        comm = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
     with open(out_mp3, "wb") as f:
         async for chunk in comm.stream():
             if chunk["type"] == "audio":
                 f.write(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
+            elif chunk["type"] in ("WordBoundary", "SentenceBoundary"):
                 words.append({
                     "start": chunk["offset"] / 1e7,
                     "end": (chunk["offset"] + chunk["duration"]) / 1e7,

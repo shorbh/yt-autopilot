@@ -41,6 +41,7 @@ jobs:
 
       - name: Produce
         env:
+          PYTHONUNBUFFERED: "1"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -57,8 +58,8 @@ jobs:
           if [ -n "$FORCE_TOPIC" ]; then ARGS+=(--topic "$FORCE_TOPIC"); fi
           python run_produce.py "${ARGS[@]}"
 
-      - name: Upload rendered files (dry-run only)
-        if: ${{ inputs.dry_run == true }}
+      - name: Upload rendered files (dry-run only; also on failure for debugging)
+        if: ${{ always() && inputs.dry_run == true }}
         uses: actions/upload-artifact@v4
         with:
           name: rendered-video
@@ -67,7 +68,9 @@ jobs:
             build/**/short.mp4
             build/**/thumbnail.jpg
             build/**/script.json
+            build/**/captions.srt
           retention-days: 3
+          if-no-files-found: ignore
 
       - name: Commit state
         if: ${{ inputs.dry_run != true }}   # also true on the schedule trigger (inputs empty)
