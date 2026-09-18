@@ -102,19 +102,26 @@ def stat_card(cfg: dict, label: str, value: str, w: int, h: int, out: Path) -> P
     return out
 
 
+def _coerce_series(raw: list) -> list[dict]:
+    series = [
+        {**s, "points": [(float(str(p[0]).replace(",", "").lstrip("$")), float(str(p[1]).replace(",", "").lstrip("$"))) for p in s["points"]]}
+        for s in raw
+    ]
+    return [s for s in series if s["points"]]
+
+
 def chart_image(cfg: dict, chart: dict, w: int, h: int, out: Path) -> Path | None:
-    """Simple, clean line/bar chart drawn with PIL (no matplotlib dependency)."""
+    """Simple, clean line/bar chart drawn with PIL (no matplotlib dependency).
+    If chart['_fixed_range'] holds the full chart, axes are computed from it so that
+    progressive (partial-data) frames keep a stable scale."""
     try:
         # coerce to floats: LLMs sometimes emit "1200" or "$1,200" instead of numbers
-        series = [
-            {**s, "points": [(float(str(p[0]).replace(",", "").lstrip("$")), float(str(p[1]).replace(",", "").lstrip("$"))) for p in s["points"]]}
-            for s in chart["series"]
-        ]
-        series = [s for s in series if s["points"]]
-        pts_all = [p for s in series for p in s["points"]]
+        series = _coerce_series(chart["series"])
+        full = _coerce_series(chart["_fixed_range"]["series"]) if chart.get("_fixed_range") else series
+        pts_all = [p for s in full for p in s["points"]]
         xs = [p[0] for p in pts_all]
         ys = [p[1] for p in pts_all]
-        if not xs or max(xs) == min(xs):
+        if not xs or max(xs) == min(xs) or not series:
             return None
     except (KeyError, TypeError, IndexError, ValueError, AttributeError):
         return None
@@ -137,16 +144,17 @@ def chart_image(cfg: dict, chart: dict, w: int, h: int, out: Path) -> Path | Non
 
     grid = (60, 70, 100)
     small = font(cfg, int(h * 0.028))
+    y_prefix, y_suffix = str(chart.get("y_prefix") or ""), str(chart.get("y_suffix") or "")  # LLMs may emit null
     for i in range(6):
         gy = y0 + (y1 - y0) * i / 5
         d.line([(x0, gy), (x1, gy)], fill=grid, width=2)
         val = ymax - (ymax - ymin) * i / 5
-        d.text((x0 - 14, gy), f"{chart.get('y_prefix', '')}{val:,.0f}{chart.get('y_suffix', '')}", font=small, fill=(180, 190, 210), anchor="rm")
+        d.text((x0 - 14, gy), f"{y_prefix}{val:,.0f}{y_suffix}", font=small, fill=(180, 190, 210), anchor="rm")
     for i in range(6):
         gx = x0 + (x1 - x0) * i / 5
         d.text((gx, y1 + 12), f"{xmin + (xmax - xmin) * i / 5:,.0f}", font=small, fill=(180, 190, 210), anchor="mt")
-    d.text(((x0 + x1) / 2, h - pad_b * 0.35), chart.get("x_label", ""), font=small, fill=(200, 205, 220), anchor="mm")
-    d.text((x0, pad_t * 0.45), chart.get("title", "")[:80], font=font(cfg, int(h * 0.05)), fill=hex_to_rgb(st["text"]), anchor="lm")
+    d.text(((x0 + x1) / 2, h - pad_b * 0.35), str(chart.get("x_label") or ""), font=small, fill=(200, 205, 220), anchor="mm")
+    d.text((x0, pad_t * 0.45), str(chart.get("title") or "")[:80], font=font(cfg, int(h * 0.05)), fill=hex_to_rgb(st["text"]), anchor="lm")
 
     colors = [hex_to_rgb(st["accent"]), hex_to_rgb(st["accent2"]), (120, 170, 255), (255, 120, 150)]
     ctype = chart.get("type", "line")

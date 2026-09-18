@@ -26,7 +26,7 @@ async def _synth(text: str, voice: str, rate: str, pitch: str, out_mp3: Path) ->
         async for chunk in comm.stream():
             if chunk["type"] == "audio":
                 f.write(chunk["data"])
-            elif chunk["type"] in ("WordBoundary", "SentenceBoundary"):
+            elif chunk["type"] == "WordBoundary":  # sentence boundaries would duplicate/overlap word times
                 words.append({
                     "start": chunk["offset"] / 1e7,
                     "end": (chunk["offset"] + chunk["duration"]) / 1e7,
@@ -54,20 +54,29 @@ def synthesize(cfg: dict, text: str, out_mp3: Path, retries: int = 3) -> dict:
 
 def synthesize_sections(cfg: dict, sections: list[dict], workdir: Path) -> list[dict]:
     """One mp3 per section so we know exact per-section durations. Adds 'audio','duration','words'."""
-    out = []
-    for i, s in enumerate(sections):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _one(i_s):
+        i, s = i_s
         mp3 = workdir / f"sec_{i:02d}.mp3"
         info = synthesize(cfg, s["narration"], mp3)
-        out.append({**s, "audio": str(mp3), "duration": info["duration"], "words": info["words"]})
-    return out
+        return {**s, "audio": str(mp3), "duration": info["duration"], "words": info["words"]}
+
+    # 3 concurrent requests: fast, but gentle enough not to trip Microsoft's rate limiting.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        return list(pool.map(_one, enumerate(sections)))
 
 
-def concat_audio(section_audio: list[Path], out_path: Path, gap_s: float = 0.35) -> float:
-    """Concatenate with a short silence between sections. Returns total duration."""
+def concat_audio(section_audio: list[Path], out_path: Path, gap_s: float = 0.35,
+                 lead_in: list[float] | None = None) -> float:
+    """Concatenate with a short silence between sections. `lead_in[i]` seconds of silence are
+    inserted BEFORE section i (used for chapter cards). Returns total duration."""
     inputs, filters = [], []
+    lead_in = lead_in or [0.0] * len(section_audio)
     for i, p in enumerate(section_audio):
         inputs += ["-i", str(p)]
-        filters.append(f"[{i}:a]apad=pad_dur={gap_s}[a{i}]")
+        pre = f"adelay={int(lead_in[i] * 1000)}:all=1," if lead_in[i] > 0 else ""
+        filters.append(f"[{i}:a]{pre}apad=pad_dur={gap_s}[a{i}]")
     joined = "".join(f"[a{i}]" for i in range(len(section_audio)))
     # loudnorm internally upsamples to 192 kHz; resample back to 48 kHz so the AAC encoder gets a sane rate.
     fc = ";".join(filters) + f";{joined}concat=n={len(section_audio)}:v=0:a=1,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[out]"

@@ -33,7 +33,7 @@ def _gemini(cfg, system, user, temperature):
     body = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
-        "generationConfig": {"temperature": temperature, "response_mime_type": "application/json", "maxOutputTokens": 8192},
+        "generationConfig": {"temperature": temperature, "response_mime_type": "application/json", "maxOutputTokens": 16384},
     }
     r = requests.post(url, json=body, timeout=180)
     if r.status_code != 200:

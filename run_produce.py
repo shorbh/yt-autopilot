@@ -45,23 +45,27 @@ def main() -> int:
     print(f"[1/5] Topic: {pick['topic']}  ({pick['category']} · {pick['format'].split(':')[0]})")
 
     script = generate_script(cfg, pick)
-    print(f"[2/5] Script: '{script['title']}'  ~{word_count(script)} words")
+    print(f"[2/5] Script: '{script['title']}'  ~{word_count(script)} words  ({time.time()-t0:.0f}s)")
 
     workdir = BUILD / f"{datetime.now():%Y%m%d}-{slugify(script['title'])}"
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / "script.json").write_text(json.dumps({"pick": pick, "script": script}, indent=2, ensure_ascii=False), encoding="utf-8")
 
+    t1 = time.time()
     long = build_long_video(cfg, script, workdir)
-    print(f"[3/5] Long video rendered: {long['duration']/60:.1f} min -> {long['path']}")
+    print(f"[3/5] Long video rendered: {long['duration']/60:.1f} min in {time.time()-t1:.0f}s -> {long['path']}")
     thumb = thumbnail(cfg, script, workdir)
 
+    t2 = time.time()
     shorts = [] if args.no_shorts else build_shorts(cfg, script, workdir)
-    print(f"[4/5] Shorts rendered: {len(shorts)}")
+    print(f"[4/5] Shorts rendered: {len(shorts)} in {time.time()-t2:.0f}s")
 
     # fill in timestamps
     desc = script["description"]
     stamps = "\n".join(long["timestamps"])
-    desc = re.sub(r"\[00:00\].*?(\n|$)", "", desc)  # drop placeholder lines if the model added any
+    # drop the model's placeholder timestamps (inline or on their own lines); real chapters are appended below
+    desc = re.sub(r"\s*\[\d{1,2}:\d{2}\][^\[\n.]*\.?", "", desc)
+    desc = re.sub(r"[ \t]{2,}", " ", desc)
     desc = desc.strip() + "\n\nChapters:\n" + stamps
 
     if args.dry_run:

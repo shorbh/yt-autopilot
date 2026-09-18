@@ -68,7 +68,7 @@ jobs:
             build/**/short.mp4
             build/**/thumbnail.jpg
             build/**/script.json
-            build/**/captions.srt
+            build/**/captions.ass
           retention-days: 3
           if-no-files-found: ignore
 

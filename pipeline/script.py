@@ -19,7 +19,8 @@ Return ONLY valid JSON matching the schema requested."""
 SCHEMA = """{
   "title": "<= 60 chars, curiosity + specific number or contrast, no clickbait lies",
   "alt_titles": ["2 alternative titles"],
-  "thumbnail_text": "2-4 words, all caps, punchy (e.g. '1% = $180,000')",
+  "thumbnail_text": "2-4 words, all caps, punchy, with a number or contrast (e.g. '1% = $180,000')",
+  "thumbnail_query": "2-4 word stock photo search, object/scene not a face (e.g. 'stack of coins desk')",
   "description": "150-250 words. First line is a hook. Include 3 timestamps placeholders like [00:00], a one-line disclaimer, and a call to subscribe. No links.",
   "tags": ["12-18 lowercase tags"],
   "sections": [
@@ -68,7 +69,10 @@ FORMAT TO FOLLOW: {pick['format']}
 
 Total narration length across all sections: about {target_words} words (±10%).
 Use 7 sections total: hook, s1..s5, close. Mark exactly 1-2 sections as short_worthy.
-The 'chart' must visualise the video's core worked example with 2 series and 6-12 points each; make the numbers consistent with the narration.
+The 'chart' must visualise the video's core worked example with 1-2 series and 4-12 points each; make the numbers consistent with the narration.
+Both chart series MUST be in the same unit and a similar magnitude (e.g. two dollar balances), never a price next to a total value — otherwise one line is flat.
+'thumbnail_text' must be 2-4 words containing a number or a stark contrast (e.g. '$50K TO EXERCISE', '1% = $100,000', 'RSUs VS OPTIONS').
+Also return 'thumbnail_query': a 2-4 word stock-photo search for the thumbnail background (an object or scene, not a person's face).
 The three Shorts must each be a different angle on the topic (the number, the mistake, the rule) and must NOT repeat the long video's sentences.
 
 Return JSON exactly matching this schema:

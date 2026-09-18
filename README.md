@@ -1,5 +1,8 @@
 # yt-autopilot — a zero-touch, zero-cost faceless YouTube channel
 
+> **Maintainers:** see **[PLAYBOOK.md](PLAYBOOK.md)** for the full build log, every decision and gotcha,
+> the operating manual, and the checklist for launching another channel. Update its change log with every change.
+
 Every Monday, GitHub Actions (free) picks an un-used topic, writes a researched script with a
 worked numeric example, voices it with a free neural voice, renders a captioned 6–10 minute video
 plus three vertical Shorts, generates a thumbnail, uploads everything to YouTube and schedules the
