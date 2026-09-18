@@ -6,3 +6,4 @@ google-api-python-client>=2.100.0
 google-auth-oauthlib>=1.1.0
 google-auth-httplib2>=0.1.1
 tzdata>=2024.1          # zoneinfo database for Windows (no-op on Linux/macOS)
+cairosvg>=2.7.0         # rasterises Lucide SVG icons; needs libcairo2 (apt) — icons are skipped if missing

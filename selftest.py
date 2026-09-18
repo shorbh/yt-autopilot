@@ -1,19 +1,21 @@
-"""Smoke test WITHOUT any API keys: renders a 40-second sample video + 1 Short from a canned
+"""Smoke test WITHOUT any API keys: renders a ~40-second sample video + 1 Short from a canned
 script using free edge-tts and generated visuals. Proves ffmpeg/fonts/TTS all work on this machine.
+Without an LLM key the storyboard degrades to default (callout) beats, which still exercises the
+beat engine, karaoke captions and chapter cards.
 
   python selftest.py
 Output: build/selftest/long.mp4, build/selftest/short_0/short.mp4, build/selftest/thumbnail.jpg
 """
 import shutil
 import sys
-from pathlib import Path
 
 from pipeline.config import BUILD, load_config
 from pipeline.render import build_long_video, build_shorts, thumbnail
 
 SCRIPT = {
     "title": "What a 1% Fee Really Costs You",
-    "thumbnail_text": "1% = $180,000",
+    "thumbnail_text": "1% = $100,000",
+    "thumbnail_query": "stack of coins desk",
     "description": "A quick demo render.",
     "tags": ["finance", "index funds", "fees"],
     "chart": {
@@ -24,8 +26,7 @@ SCRIPT = {
         ],
     },
     "sections": [
-        {"id": "hook", "heading": "The 1% lie", "visual_query": "calculator desk", "short_worthy": True,
-         "stat": {"label": "lost to a one percent fee over 30 years", "value": "$100,000"},
+        {"id": "hook", "heading": "The 1% lie", "visual_query": "calculator desk", "short_worthy": True, "stat": None,
          "narration": "A one percent fee doesn't cost you one percent. On a five hundred dollar monthly investment over thirty years, it quietly removes about one hundred thousand dollars. Here's the math, and the fix."},
         {"id": "s1", "heading": "Same money, two funds", "visual_query": "stock chart", "stat": None, "short_worthy": False,
          "narration": "Imagine two identical investors. Both put in five hundred dollars a month. Both earn seven percent before fees. One pays a tenth of a percent. The other pays one point one percent. After thirty years the gap between them is not one percent. It's over twenty percent of the final balance."},
@@ -46,7 +47,7 @@ def main() -> int:
     wd = BUILD / "selftest"
     shutil.rmtree(wd, ignore_errors=True)
     wd.mkdir(parents=True)
-    print("Rendering sample long video (edge-tts + ffmpeg)...")
+    print("Rendering sample long video (edge-tts + beat engine + ffmpeg)...")
     long = build_long_video(cfg, SCRIPT, wd)
     print(f"  OK  {long['path']}  ({long['duration']:.1f}s)")
     thumbnail(cfg, SCRIPT, wd)

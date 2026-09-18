@@ -181,15 +181,19 @@ def chart_image(cfg: dict, chart: dict, w: int, h: int, out: Path) -> Path | Non
     return out
 
 
-def lower_third(cfg: dict, text: str, w: int, h: int, out: Path) -> Path:
-    """Transparent PNG overlay with the section heading (top-left pill)."""
+def lower_third(cfg: dict, text: str, w: int, h: int, out: Path, center: bool = False) -> Path:
+    """Transparent PNG overlay with the section heading: top-left pill (landscape) or a centred
+    top title bar (Shorts, where the hook title should stay pinned)."""
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    f = font(cfg, int(min(w, h) * 0.045))
+    f = font(cfg, int(min(w, h) * (0.045 if not center else 0.05)))
     text = text if len(text) <= 36 else text[:33].rstrip() + "..."
     tw = d.textlength(text, font=f)
-    pad = int(h * 0.016)
-    x, y = int(w * 0.04), int(h * 0.05)
+    while tw > w * 0.86 and f.size > 20:
+        f = font(cfg, f.size - 4)
+        tw = d.textlength(text, font=f)
+    pad = int(h * 0.016) if not center else int(w * 0.03)
+    x, y = (int(w * 0.04), int(h * 0.05)) if not center else (int(w / 2 - tw / 2 - pad - 10), int(h * 0.08))
     d.rounded_rectangle([x, y, x + tw + pad * 2, y + f.size + pad * 2], radius=14, fill=(11, 16, 32, 200))
     d.rectangle([x, y, x + 8, y + f.size + pad * 2], fill=hex_to_rgb(cfg["style"]["accent"]) + (255,))
     d.text((x + pad + 10, y + pad), text, font=f, fill=(255, 255, 255, 255))

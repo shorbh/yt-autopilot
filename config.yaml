@@ -30,6 +30,8 @@ video:
   captions: true
   b_roll: "auto"             # auto = Pexels if PEXELS_API_KEY set, else generated slides
   music: false               # keep false unless you add royalty-free tracks to assets/music/
+  outro: true                # 6 s end screen (subscribe CTA) after the close section
+  # Sketch illustrations come from Pollinations.ai (free, keyless). Set env ILLUSTRATIONS=0 to disable.
 
 shorts:
   count: 3

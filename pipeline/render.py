@@ -16,13 +16,14 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import motion, visuals
+from . import assets_remote, motion, visuals
 from .config import ROOT, hex_to_rgb
 from .storyboard import storyboard
 from .tts import concat_audio, ffprobe_duration, synthesize, synthesize_sections
 
 GAP = 0.35            # silence between sections (audio) — mirrored in video timing
 CHAPTER_SECS = 1.3    # chapter title card length (audio is delayed by the same amount)
+OUTRO_SECS = 6.0      # end screen (subscribe CTA); audio is padded with silence to match
 FADE = 0.25           # fade-in on every cut
 MIN_BEAT = 1.4        # beats shorter than this are merged into the previous one
 
@@ -174,8 +175,23 @@ class _BrollCache:
         if res is None:
             p = visuals.pexels_photo(query, self.dir / f"{slug}.jpg", portrait=self.portrait)
             res = ("image", p) if p else None
-        self.cache[key] = res
+        self.cache[slug] = res
         return res
+
+    def photo(self, query: str) -> Path | None:
+        """Photo only (for photo_text cards). Cached separately from video b-roll."""
+        slug = "ph_" + "".join(c if c.isalnum() else "_" for c in query.lower().strip())[:40]
+        with self._guard:
+            lock = self._locks.setdefault(slug, threading.Lock())
+        with lock:
+            if slug in self.cache:
+                return self.cache[slug][1] if self.cache[slug] else None
+            p = visuals.pexels_photo(query, self.dir / f"{slug}.jpg", portrait=self.portrait)
+            self.cache[slug] = ("image", p) if p else None
+            return p
+
+
+MAX_ILLUSTRATIONS = 6  # per video; Pollinations anonymous rate is ~1 image / 15 s
 
 
 def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdir: Path,
@@ -185,26 +201,50 @@ def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdi
     vtype = vis.get("type")
     fdir = workdir / f"frames_{idx:03d}"
 
+    def _callout(text: str | None = None) -> dict:
+        return {"type": "callout", "text": (text or beat["text"])[:90]}
+
     try:
         if vtype == "chart" and not chart:
-            vtype, vis = "callout", {"type": "callout", "text": beat["text"][:90]}
+            vtype, vis = "callout", _callout()
         if vtype == "chart" and chart:
             r = motion.chart_progressive(cfg, chart, w, h, fdir)
             if r:
                 _clip_from_frames(r[0], r[1], beat["dur"], w, h, fps, overlay, out)
                 return out
-            vtype = "callout"
-            vis = {"type": "callout", "text": beat["text"][:90]}
+            vtype, vis = "callout", _callout()
         if vtype == "broll" and cfg["video"].get("b_roll", "auto") != "off":
             got = broll.get(vis.get("query", "finance desk"), beat["dur"])
             if got:
                 kind, src = got
                 (_clip_from_video if kind == "video" else _clip_from_image)(src, beat["dur"], w, h, fps, overlay, out)
                 return out
-            vtype = "callout"
-            vis = {"type": "callout", "text": beat["text"][:90]}
+            vtype, vis = "callout", _callout()
+        elif vtype == "broll":
+            vtype, vis = "callout", _callout()
+        if vtype == "photo_text":
+            photo = broll.photo(vis.get("query", "finance desk")) if cfg["video"].get("b_roll", "auto") != "off" else None
+            r = motion.photo_text(cfg, vis, w, h, fdir, photo, variant=idx)
+            if r:
+                _clip_from_frames(r[0], r[1], beat["dur"], w, h, fps, overlay, out)
+                return out
+            vtype, vis = "callout", _callout(vis.get("text"))
+        if vtype == "illustration":
+            fut = beat.get("_illus")
+            sketch = None
+            if fut is not None:
+                try:
+                    # worst case the 6th sketch starts ~5 x (16 s interval + generation) after launch
+                    sketch = fut.result(timeout=360)
+                except Exception as e:  # noqa: BLE001
+                    print(f"[warn] illustration for beat {idx} unavailable: {str(e)[:120]}")
+            r = motion.illustration_card(cfg, vis, w, h, fdir, sketch, variant=idx)
+            if r:
+                _clip_from_frames(r[0], r[1], beat["dur"], w, h, fps, overlay, out)
+                return out
+            vtype, vis = "callout", _callout(vis.get("caption") or None)
         if vtype in motion.RENDERERS:
-            fd, n = motion.RENDERERS[vtype](cfg, vis, w, h, fdir)
+            fd, n = motion.RENDERERS[vtype](cfg, vis, w, h, fdir, variant=idx)
             _clip_from_frames(fd, n, beat["dur"], w, h, fps, overlay, out)
             return out
     except Exception as e:  # noqa: BLE001 - a single bad beat must not kill the video
@@ -299,13 +339,14 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
     if beats_by_id is None:
         beats_by_id = storyboard(cfg, sections, chart)
     broll = _BrollCache(workdir, portrait)
+    outro = chapters and cfg["video"].get("outro", True)
     # 1) Plan every clip (cheap, sequential) ...
     jobs: list = []          # callables producing a clip path, in playback order
     offsets: list[float] = []
     lead_in: list[float] = []
+    all_beats: list[dict] = []
     t = 0.0
     idx = 0
-    n_beats = 0
     for si, s in enumerate(sections):
         card = chapters and 0 < si < len(sections) - 1
         lead_in.append(CHAPTER_SECS if card else 0.0)
@@ -318,21 +359,56 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
             jobs.append(_chapter)
             t += CHAPTER_SECS
         offsets.append(t)
-        overlay = visuals.lower_third(cfg, s["heading"], w, h, workdir / f"lt_{si:02d}.png") if s.get("heading") and not portrait else None
+        overlay = (visuals.lower_third(cfg, s["heading"], w, h, workdir / f"lt_{si:02d}.png", center=portrait)
+                   if s.get("heading") else None)
         beats = _align_beats(s, beats_by_id.get(s["id"], []))
         for b in beats:
             def _beat(b=b, idx=idx, overlay=overlay, heading=s["heading"]):
                 return _beat_clip(cfg, b, idx, w, h, fps, workdir, overlay, chart, broll, heading)
             jobs.append(_beat)
+            all_beats.append(b)
             idx += 1
-        n_beats += len(beats)
         t += s["duration"] + GAP
-    print(f"      storyboard: {n_beats} beats across {len(sections)} sections "
-          f"(avg {sum(s['duration'] for s in sections) / max(1, n_beats):.1f}s per visual); rendering with {WORKERS} workers")
+    if outro:
+        def _outro():
+            fd, n = motion.outro_card(cfg, w, h, workdir / "frames_outro")
+            c = workdir / "outro.mp4"
+            _clip_from_frames(fd, n, OUTRO_SECS, w, h, fps, None, c)
+            return c
+        jobs.append(_outro)
 
-    # 2) ... then render them in parallel (PIL and ffmpeg both release the GIL), keeping order.
-    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        clips: list[Path] = list(pool.map(lambda job: job(), jobs))
+    # Illustrations are slow (rate-limited remote service): fetch them sequentially in ONE background
+    # thread while the beat clips render; each illustration beat waits on its own future.
+    illus_beats = [b for b in all_beats if b["visual"].get("type") == "illustration"]
+    for b in illus_beats[MAX_ILLUSTRATIONS:]:
+        b["visual"] = {"type": "callout", "text": (b["visual"].get("caption") or b["text"])[:90]}
+    illus_pool = ThreadPoolExecutor(max_workers=1)
+    for k, b in enumerate(illus_beats[:MAX_ILLUSTRATIONS]):
+        prompt = b["visual"].get("scene") or b["text"]
+        b["_illus"] = illus_pool.submit(assets_remote.illustration, prompt, workdir / f"illus_{k:02d}.png", 1024, 1024)
+
+    types = [b["visual"].get("type") for b in all_beats]
+    mix = ", ".join(f"{types.count(x)} {x}" for x in sorted(set(types), key=types.index))
+    print(f"      storyboard: {len(all_beats)} beats across {len(sections)} sections "
+          f"(avg {sum(s['duration'] for s in sections) / max(1, len(all_beats)):.1f}s per visual): {mix}; "
+          f"rendering with {WORKERS} workers")
+
+    # 2) ... then render them in parallel (PIL and ffmpeg both release the GIL). Illustration beats
+    #    wait on a slow remote fetch, so they are dispatched LAST — no worker idles while the fast
+    #    cards render — and results are stitched back into playback order.
+    def _is_slow(job) -> bool:
+        b = getattr(job, "__defaults__", None)
+        return bool(b) and isinstance(b[0], dict) and b[0].get("visual", {}).get("type") == "illustration"
+
+    order = [i for i, j in enumerate(jobs) if not _is_slow(j)] + [i for i, j in enumerate(jobs) if _is_slow(j)]
+    try:
+        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            futures = {i: pool.submit(jobs[i]) for i in order}
+            clips: list[Path] = [futures[i].result() for i in range(len(jobs))]
+    finally:
+        # cancel sketches nobody is waiting for any more (timed-out beats already fell back);
+        # otherwise the interpreter would block at exit until the queue drained
+        illus_pool.shutdown(wait=False, cancel_futures=True)
 
     lst = workdir / "concat.txt"
     lst.write_text("".join(f"file '{c.name}'\n" for c in clips), encoding="utf-8")
@@ -340,7 +416,7 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
     _run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", "concat.txt", "-c", "copy", silent.name], cwd=workdir)
 
     audio = workdir / "voice.m4a"
-    concat_audio([Path(s["audio"]) for s in sections], audio, GAP, lead_in=lead_in)
+    concat_audio([Path(s["audio"]) for s in sections], audio, GAP, lead_in=lead_in, tail_pad=OUTRO_SECS if outro else 0.0)
 
     music = _music_track(cfg)
     base = ["ffmpeg", "-y", "-loglevel", "error", "-i", silent.name, "-i", audio.name]
@@ -350,16 +426,26 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
         afilter = ["-filter_complex", "[2:a]volume=0.10[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=0[a]", "-map", "0:v", "-map", "[a]"]
     tail = ["-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out_mp4)]
 
+    # Shorts: thin progress bar along the bottom (standard retention device on vertical video).
+    # drawbox cannot animate (its expressions are evaluated once; `t` there means thickness), so a
+    # full-width colour strip slides in from the left via overlay, whose x expression is per-frame.
+    bar = ""
+    if portrait:
+        total = sum(s["duration"] + GAP for s in sections)
+        r, g, b = hex_to_rgb(cfg["style"]["accent"])
+        bar = (f"[v];color=c=0x{r:02X}{g:02X}{b:02X}@0.9:s={w}x14:r={fps}[bar];"
+               f"[v][bar]overlay=x='-w+w*min(1\\,t/{total:.2f})':y=H-h:format=auto")
+
     if cfg["video"].get("captions", True):
         ass = build_ass(cfg, sections, offsets, w, h, workdir / "captions.ass", portrait)
         n_words = sum(len(s.get("words") or []) for s in sections)
         print(f"      captions: {ass.stat().st_size} bytes, {n_words} timed words from TTS" + ("" if n_words else " (estimated timings)"))
-        cmd = base + ["-vf", f"ass={ass.name}", *FINAL] + afilter + tail
-        try:
-            _run(cmd, cwd=workdir)
-            return out_mp4, offsets
-        except RuntimeError as e:
-            print(f"[warn] caption burn-in failed, rendering without captions: {str(e)[-400:]}")
+        for vf in dict.fromkeys((f"ass={ass.name}" + bar, f"ass={ass.name}")):  # de-duplicated, ordered
+            try:
+                _run(base + ["-vf", vf, *FINAL] + afilter + tail, cwd=workdir)
+                return out_mp4, offsets
+            except RuntimeError as e:
+                print(f"[warn] final pass failed with filters {vf}: {str(e)[-300:]}")
 
     _run(base + ["-c:v", "copy"] + afilter + tail, cwd=workdir)
     return out_mp4, offsets

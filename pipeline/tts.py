@@ -68,15 +68,18 @@ def synthesize_sections(cfg: dict, sections: list[dict], workdir: Path) -> list[
 
 
 def concat_audio(section_audio: list[Path], out_path: Path, gap_s: float = 0.35,
-                 lead_in: list[float] | None = None) -> float:
+                 lead_in: list[float] | None = None, tail_pad: float = 0.0) -> float:
     """Concatenate with a short silence between sections. `lead_in[i]` seconds of silence are
-    inserted BEFORE section i (used for chapter cards). Returns total duration."""
+    inserted BEFORE section i (chapter cards); `tail_pad` seconds after the last (end screen).
+    Returns total duration."""
     inputs, filters = [], []
     lead_in = lead_in or [0.0] * len(section_audio)
+    last = len(section_audio) - 1
     for i, p in enumerate(section_audio):
         inputs += ["-i", str(p)]
         pre = f"adelay={int(lead_in[i] * 1000)}:all=1," if lead_in[i] > 0 else ""
-        filters.append(f"[{i}:a]{pre}apad=pad_dur={gap_s}[a{i}]")
+        pad = gap_s + (tail_pad if i == last else 0.0)
+        filters.append(f"[{i}:a]{pre}apad=pad_dur={pad:.3f}[a{i}]")
     joined = "".join(f"[a{i}]" for i in range(len(section_audio)))
     # loudnorm internally upsamples to 192 kHz; resample back to 48 kHz so the AAC encoder gets a sane rate.
     fc = ";".join(filters) + f";{joined}concat=n={len(section_audio)}:v=0:a=1,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[out]"
