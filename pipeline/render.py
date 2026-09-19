@@ -18,7 +18,7 @@ from pathlib import Path
 
 from . import assets_remote, motion, visuals
 from .config import ROOT, hex_to_rgb
-from .storyboard import storyboard
+from .storyboard import _key_phrase, storyboard
 from .tts import concat_audio, ffprobe_duration, synthesize, synthesize_sections
 
 GAP = 0.35            # silence between sections (audio) — mirrored in video timing
@@ -95,8 +95,11 @@ def _align_beats(section: dict, beats: list[dict]) -> list[dict]:
 
 # ------------------------------------------------------------------ clip builders
 
+FADE_COLOR = "0x0B1020"   # fade from the brand navy, not black: a black dip on a navy card read as a dropout
+
+
 def _vf_common(w: int, h: int, fps: int) -> str:
-    return f"fps={fps},setsar=1,fade=t=in:d={FADE}"
+    return f"fps={fps},setsar=1,fade=t=in:d={FADE}:color={FADE_COLOR}"
 
 
 def _nframes(dur: float, fps: int) -> int:
@@ -108,7 +111,7 @@ def _nframes(dur: float, fps: int) -> int:
 def _clip_from_frames(frames_dir: Path, n: int, dur: float, w: int, h: int, fps: int, overlay: Path | None, out: Path) -> None:
     anim = n / motion.ANIM_FPS
     hold = max(0.0, dur - anim + 0.5)
-    vf = f"[0:v]fps={fps},tpad=stop_mode=clone:stop_duration={hold:.3f},setsar=1,fade=t=in:d={FADE}[bg]"
+    vf = f"[0:v]fps={fps},tpad=stop_mode=clone:stop_duration={hold:.3f},setsar=1,fade=t=in:d={FADE}:color={FADE_COLOR}[bg]"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(motion.ANIM_FPS), "-i", str(frames_dir / "%04d.png")]
     if overlay:
         cmd += ["-i", str(overlay)]
@@ -136,7 +139,7 @@ def _clip_from_image(src: Path, dur: float, w: int, h: int, fps: int, overlay: P
     frames = _nframes(dur, fps)
     zoom = f"zoompan=z='min(zoom+0.0006,1.14)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps={fps}"
     vf = (f"[0:v]scale={int(w * 1.3)}:{int(h * 1.3)}:force_original_aspect_ratio=increase,crop={int(w * 1.3)}:{int(h * 1.3)},"
-          f"{zoom},eq=brightness=-0.1,setsar=1,fade=t=in:d={FADE}[bg]")
+          f"{zoom},eq=brightness=-0.1,setsar=1,fade=t=in:d={FADE}:color={FADE_COLOR}[bg]")
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src)]
     if overlay:
         cmd += ["-i", str(overlay)]
@@ -178,9 +181,10 @@ class _BrollCache:
         self.cache[slug] = res
         return res
 
-    def photo(self, query: str) -> Path | None:
-        """Photo only (for photo_text cards). Cached separately from video b-roll."""
-        slug = "ph_" + "".join(c if c.isalnum() else "_" for c in query.lower().strip())[:40]
+    def photo(self, query: str, key: str | None = None) -> Path | None:
+        """Photo only (for photo_text cards). Cached separately from video b-roll. `key` overrides the
+        cache slug so different queries can be pinned to one file (same person -> same face)."""
+        slug = "ph_" + "".join(c if c.isalnum() else "_" for c in (key or query).lower().strip())[:40]
         with self._guard:
             lock = self._locks.setdefault(slug, threading.Lock())
         with lock:
@@ -189,6 +193,14 @@ class _BrollCache:
             p = visuals.pexels_photo(query, self.dir / f"{slug}.jpg", portrait=self.portrait)
             self.cache[slug] = ("image", p) if p else None
             return p
+
+    def person(self, ch: dict | None) -> Path | None:
+        """Portrait photo for a named character. The FIRST mood a person appears with fixes their face for
+        the whole video (one download per name), so 'Sarah' is the same woman in every beat."""
+        if not isinstance(ch, dict) or not ch.get("name"):
+            return None
+        q = assets_remote.person_query(ch.get("gender"), ch.get("mood"))
+        return self.photo(q, key="person_" + str(ch["name"]).strip().lower())
 
 
 def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdir: Path,
@@ -214,7 +226,10 @@ def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdi
             got = broll.get(vis.get("query", "finance desk"), beat["dur"])
             if got:
                 kind, src = got
-                (_clip_from_video if kind == "video" else _clip_from_image)(src, beat["dur"], w, h, fps, overlay, out)
+                # footage always carries the sentence's key phrase (plus the section lower third)
+                phrase = str(vis.get("text") or _key_phrase(beat["text"]))
+                ov = visuals.broll_overlay(cfg, phrase, w, h, workdir / f"ov_{idx:03d}.png", overlay)
+                (_clip_from_video if kind == "video" else _clip_from_image)(src, beat["dur"], w, h, fps, ov, out)
                 return out
             vtype, vis = "callout", _callout()
         elif vtype == "broll":
@@ -227,11 +242,10 @@ def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdi
                 return out
             vtype, vis = "callout", _callout(vis.get("text"))
         if vtype == "character":
-            r = motion.character(cfg, vis, w, h, fdir, variant=idx)
-            if r:
-                _clip_from_frames(r[0], r[1], beat["dur"], w, h, fps, overlay, out)
-                return out
-            vtype, vis = "callout", _callout(vis.get("text") or None)
+            photo = broll.person(vis.get("character")) if cfg["video"].get("b_roll", "auto") != "off" else None
+            fd, n = motion.character(cfg, vis, w, h, fdir, photo=photo, variant=idx)
+            _clip_from_frames(fd, n, beat["dur"], w, h, fps, overlay, out)
+            return out
         if vtype in motion.RENDERERS:
             fd, n = motion.RENDERERS[vtype](cfg, vis, w, h, fdir, variant=idx)
             _clip_from_frames(fd, n, beat["dur"], w, h, fps, overlay, out)
@@ -373,26 +387,27 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
           f"rendering with {WORKERS} workers")
 
     # Warm the remote-asset caches once, concurrently, so beat workers never wait on the network
-    # for the same icon/character twice.
-    warm = set()
+    # for the same icon / person photo twice. Icons are rasterised at the exact base size the
+    # renderers use; people are fetched in first-appearance order so their face is fixed by the
+    # first mood the script gives them.
+    icons: set[str] = set()
+    people: dict[str, dict] = {}
     for b in all_beats:
         v = b["visual"]
         sides = [v.get(s) for s in ("left", "right") if isinstance(v.get(s), dict)]
         for ic in [v.get("icon")] + list(v.get("icons") or []) + [sd.get("icon") for sd in sides]:
             if isinstance(ic, str) and ic:
-                warm.add(("icon", ic))
-        for ch in [v.get("character")] + [sd.get("character") for sd in sides]:
-            if isinstance(ch, dict) and ch.get("name"):
-                warm.add(("peep", str(ch.get("name")), str(ch.get("gender") or "neutral"), str(ch.get("mood") or "neutral")))
-    # Warm at the exact base sizes the renderers use, so the first beat that needs an asset hits the
-    # rasterised cache too (not only the SVG cache).
+                icons.add(ic)
+        ch = v.get("character")
+        if v.get("type") == "character" and isinstance(ch, dict) and ch.get("name"):
+            people.setdefault(str(ch["name"]).strip().lower(), ch)
     accent = hex_to_rgb(cfg["style"]["accent"])
     with ThreadPoolExecutor(max_workers=6) as pool:
-        for item in warm:
-            if item[0] == "icon":
-                pool.submit(assets_remote.icon, item[1], motion.ICON_BASE, accent)
-            else:
-                pool.submit(assets_remote.peep, item[1], item[2], item[3], motion.PEEP_BASE)
+        for ic in icons:
+            pool.submit(assets_remote.icon, ic, motion.ICON_BASE, accent)
+        if cfg["video"].get("b_roll", "auto") != "off":
+            for ch in people.values():
+                pool.submit(broll.person, ch)
 
     # 2) ... then render them in parallel (PIL and ffmpeg both release the GIL), keeping order.
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
@@ -491,32 +506,32 @@ def build_shorts(cfg: dict, script: dict, workdir: Path) -> list[dict]:
 
 
 def thumbnail(cfg: dict, script: dict, workdir: Path) -> Path:
-    """Primary thumbnail (A) + two variants (B: different expression, C: alt title text, no character)
-    for YouTube Studio's Test & Compare, which the API cannot drive. Returns the path of A."""
-    a = _thumbnail(cfg, script, workdir, workdir / "thumbnail.jpg", mood=None, text=None, character=True)
+    """Primary thumbnail (A) + two variants for YouTube Studio's Test & Compare (which the API cannot drive):
+    B = same text on a different photo, C = the first alt title on photo A. Photo + big type only —
+    no cartoon character (v3.2). Returns the path of A."""
+    q = script.get("thumbnail_query") or script["sections"][0].get("visual_query", "finance")
+    photos = visuals.pexels_photos(q, [workdir / "thumb_bg.jpg", workdir / "thumb_bg2.jpg"])
+    pa = photos[0] if photos else None
+    pb = photos[1] if len(photos) > 1 else pa
+    a = _thumbnail(cfg, script, workdir / "thumbnail.jpg", pa, text=None)
     try:
-        alt_mood = "worried" if str(script.get("thumbnail_mood") or "shocked") != "worried" else "excited"
-        _thumbnail(cfg, script, workdir, workdir / "thumbnail_B.jpg", mood=alt_mood, text=None, character=True)
+        _thumbnail(cfg, script, workdir / "thumbnail_B.jpg", pb, text=None)
         alt_text = (script.get("alt_titles") or [None])[0]
-        _thumbnail(cfg, script, workdir, workdir / "thumbnail_C.jpg", mood=None, text=alt_text, character=False)
+        _thumbnail(cfg, script, workdir / "thumbnail_C.jpg", pa, text=alt_text)
     except Exception as e:  # noqa: BLE001 - variants are a bonus, never fatal
         print(f"[warn] thumbnail variants failed: {str(e)[:120]}")
     return a
 
 
-def _thumbnail(cfg: dict, script: dict, workdir: Path, out: Path, mood: str | None, text: str | None, character: bool) -> Path:
-    """Split layout: bold text panel on the left, dimmed photo fading in on the right."""
+def _thumbnail(cfg: dict, script: dict, out: Path, photo: Path | None, text: str | None) -> Path:
+    """Split layout: bold fitted text (up to 3 lines) on the left, dimmed photo fading in on the right."""
     from PIL import Image, ImageDraw, ImageEnhance
 
     W, H = 1280, 720
     st = cfg["style"]
     bg = visuals.gradient(W, H, st["bg_dark"], st["bg_dark2"])
-    q = script.get("thumbnail_query") or script["sections"][0].get("visual_query", "finance")
-    photo_path = workdir / "thumb_bg.jpg"
-    if not photo_path.exists():
-        photo_path = visuals.pexels_photo(q, photo_path)
-    if photo_path:
-        ph = Image.open(photo_path).convert("RGB")
+    if photo and Path(photo).exists():
+        ph = Image.open(photo).convert("RGB")
         ph = ph.resize((max(W, int(ph.width * H / ph.height)), H))
         ph = ph.crop((max(0, (ph.width - W) // 2), 0, max(0, (ph.width - W) // 2) + W, H))
         ph = ImageEnhance.Brightness(ph).enhance(0.7)
@@ -524,36 +539,32 @@ def _thumbnail(cfg: dict, script: dict, workdir: Path, out: Path, mood: str | No
         mask = Image.linear_gradient("L").rotate(90, expand=True).resize((W, H))  # dark->light left->right
         mask = mask.point(lambda v: max(0, min(255, int((v - 90) * 2.2))))
         bg = Image.composite(ph, bg, mask)
-    # Emotional face (the strongest CTR lever): a hand-drawn character with a surprised/worried expression
-    # on the right third, in front of the faded photo.
-    has_char = False
-    if character and cfg["video"].get("thumbnail_character", True):
-        mood = str(mood or script.get("thumbnail_mood") or "shocked")
-        who = script.get("thumbnail_character")
-        if not isinstance(who, dict):
-            who = {"name": script.get("title", "viewer"), "gender": "neutral"}
-        pp = assets_remote.peep(str(who.get("name") or "viewer"), str(who.get("gender") or "neutral"), mood, motion.PEEP_BASE)
-        if pp is not None:
-            pp = pp.resize((620, 620), Image.LANCZOS)
-            bg.paste(pp, (W - 560, H - 560), pp)  # overflows right/bottom edges; PIL clips (Peeps are half-body)
-            has_char = True
     d = ImageDraw.Draw(bg)
-    text = str(text or script.get("thumbnail_text") or script["title"])[:30].upper()
-    words = text.split()
-    line1, line2 = (" ".join(words[: max(1, len(words) // 2)]), " ".join(words[max(1, len(words) // 2):])) if len(words) > 2 else (text, "")
-    size = 150
-    f = visuals.font(cfg, size)
-    while max(d.textlength(line1, font=f), d.textlength(line2, font=f)) > W * 0.62 and size > 64:
-        size -= 6
-        f = visuals.font(cfg, size)
-    x, y = 60, H / 2 - (size * 1.15 if line2 else size * 0.5)
-    d.text((x, y), line1, font=f, fill=hex_to_rgb(st["accent2"]), stroke_width=8, stroke_fill=(0, 0, 0))
-    if line2:
-        d.text((x, y + size * 1.15), line2, font=f, fill=(255, 255, 255), stroke_width=8, stroke_fill=(0, 0, 0))
+    text = " ".join(str(text or script.get("thumbnail_text") or script["title"]).upper().split())
+    # fit the WHOLE text (no 30-char cut): wrap -> shrink -> ellipsis, 1-3 lines, first line in the highlight colour
+    fnt, lines, lh = motion.fit_text_box(cfg, d, text, W * 0.64, H * 0.72, 150, floor=72, line_spacing=1.08, max_lines=3)
+    y = H / 2 - len(lines) * lh / 2
+    for i, line in enumerate(lines):
+        d.text((60, y + i * lh), line, font=fnt, fill=hex_to_rgb(st["accent2"]) if i == 0 else (255, 255, 255),
+               stroke_width=max(5, fnt.size // 18), stroke_fill=(0, 0, 0))
     d.rectangle([0, H - 22, W, H], fill=hex_to_rgb(st["accent"]))
-    # channel tag: bottom-right normally; bottom-left when the character occupies the right third
-    tag_xy, tag_anchor = ((28, H - 46), "lm") if has_char else ((W - 28, H - 46), "rm")
-    d.text(tag_xy, cfg["channel"]["name"].upper(), font=visuals.font(cfg, 28), fill=(255, 255, 255), anchor=tag_anchor,
+    d.text((W - 28, H - 46), cfg["channel"]["name"].upper(), font=visuals.font(cfg, 28), fill=(255, 255, 255), anchor="rm",
            stroke_width=3, stroke_fill=(0, 0, 0))
     bg.save(out, "JPEG", quality=88, optimize=True)
     return out
+
+
+def contact_sheet(video: Path, out: Path, every_s: float = 6.0, cols: int = 6, tile_w: int = 320) -> Path | None:
+    """One ffmpeg call: a frame every `every_s` seconds tiled into a grid, for a 10-second visual audit of
+    the whole video without downloading it. Never fatal."""
+    try:
+        dur = ffprobe_duration(video)
+        n = max(1, int(dur / every_s) + 1)
+        rows = max(1, -(-n // cols))
+        _run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video),
+              "-vf", f"fps=1/{every_s},scale={tile_w}:-2,tile={cols}x{rows}:padding=4:margin=4:color=0x0B1020",
+              "-frames:v", "1", "-q:v", "4", str(out)])
+        return out
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] contact sheet failed: {str(e)[-200:]}")
+        return None

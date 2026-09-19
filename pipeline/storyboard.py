@@ -59,11 +59,13 @@ each sentence is spoken. Rules:
     icon_text    = a concept statement (<= 10 words) + one icon from the allowed list, e.g. "A grant is a promise" + "handshake".
     photo_text   = scene-setting or emotional sentence: short phrase + a 2-4 word stock-photo query (objects/places, no faces).
     character    = any sentence about a named or implied PERSON ("Sarah, 30, earns...", "imagine an investor who..."):
-                   give character {name, gender, mood}. Gender MUST follow the script's name/pronouns (Sarah/she -> female,
-                   Mike/he -> male; unknown -> neutral). mood in: neutral, happy, excited, worried, sad, stressed, shocked,
-                   scared, thinking, serious, proud, confused. Add "text" (<= 12 words) and optional "stat" ("$39,000").
+                   give character {name, gender, mood}; it is rendered as a real stock portrait photo chosen from gender
+                   and mood. Gender MUST follow the script's name/pronouns (Sarah/she -> female, Mike/he -> male;
+                   unknown -> neutral). mood in: neutral, happy, excited, worried, sad, stressed, shocked, scared, thinking,
+                   serious, proud, confused. Add "text" (<= 12 words) and optional "stat" ("$39,000").
                    The same name must keep the same gender across the whole video.
-    compare      = two people or two options; when the sides are people add "character" to each side instead of "icon".
+    compare      = two people or two options; when the sides are people add "character" to each side instead of "icon"
+                   (people are shown as initial avatars there).
     callout      = a rule or punchline, <= 12 words. Use SPARINGLY: at most 1 in 4 beats.
     broll        = ONLY for transitions with no data (max 15% of beats).
   Never put two visuals of the same type back to back; alternate text-heavy cards with image cards.

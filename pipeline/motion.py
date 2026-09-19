@@ -8,7 +8,8 @@ Design rules baked in here (what a motion designer would enforce):
   * every piece of text goes through fit_text_box(): wrap -> shrink -> ellipsis; nothing is clipped
   * one accent colour for "good/primary", one for "numbers/highlight"; text is white on navy
   * 3 rotating background variants so consecutive cards never look identical
-  * icons (Lucide) and imagery (photo / sketch) so the video is not text-only
+  * icons (Lucide) and imagery (real photos) so the video is not text-only
+  * nothing is drawn above TOP_SAFE: that strip belongs to the section lower-third overlay
 All sizes are relative to the canvas so the same code serves 1920x1080 and 1080x1920.
 """
 from __future__ import annotations
@@ -25,6 +26,7 @@ from .config import hex_to_rgb
 from .visuals import font, gradient
 
 ANIM_FPS = 15
+TOP_SAFE = 0.16   # fraction of the canvas height reserved for the lower-third heading overlay
 
 
 def _ease(t: float) -> float:
@@ -152,7 +154,7 @@ def _animate_number(value: str, t: float) -> str:
         num = float(raw.replace(",", ""))
     except ValueError:
         return value
-    cur = num * _ease(t)
+    cur = num * (0.1 + 0.9 * _ease(t))   # start at 10%, never a lonely "0" on the first frame
     if "." in raw:
         dec = len(raw.split(".")[1])
         s = f"{cur:,.{dec}f}" if "," in raw else f"{cur:.{dec}f}"
@@ -169,21 +171,42 @@ def _paste_rgba(img: Image.Image, layer: Image.Image, cx: float, cy: float, alph
     img.paste(layer, (int(cx - layer.width / 2), int(cy - layer.height / 2)), layer)
 
 
-PEEP_BASE = 1024   # rasterise characters once at this size; animated sizes are PIL resizes (ms, not cairo)
 ICON_BASE = 512
 
 
-def _paste_peep(img: Image.Image, ch: dict | None, size: int, cx: float, cy: float, alpha: float = 1.0) -> bool:
-    """Paste an Open Peeps character (dict: name, gender, mood) centred at (cx, cy)."""
-    if not isinstance(ch, dict) or not ch.get("name"):
-        return False
-    pp = assets_remote.peep(str(ch.get("name")), str(ch.get("gender") or "neutral"), str(ch.get("mood") or "neutral"), PEEP_BASE)
-    if pp is None:
-        return False
-    if size != PEEP_BASE:
-        pp = pp.resize((size, size), Image.LANCZOS)
-    _paste_rgba(img, pp, cx, cy, alpha)
-    return True
+def _initial_circle(cfg, d: ImageDraw.ImageDraw, name: str, size: int, col, cx: float, cy: float, alpha: float = 1.0) -> None:
+    """Typographic avatar: a filled circle with the person's initial (what apps show when there is no photo)."""
+    r = size / 2
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=_mix(col, alpha), outline=_mix((255, 255, 255), alpha * 0.35), width=max(2, size // 40))
+    ini = (name.strip()[:1] or "?").upper()
+    d.text((cx, cy + size * 0.02), ini, font=font(cfg, int(size * 0.55)), fill=_mix((11, 16, 32), alpha, _mix(col, alpha)), anchor="mm")
+
+
+def _cover(ph: Image.Image, w: int, h: int) -> Image.Image:
+    """Cover-crop a photo to exactly w x h."""
+    scale = max(w / ph.width, h / ph.height)
+    ph = ph.resize((int(ph.width * scale) + 1, int(ph.height * scale) + 1))
+    return ph.crop(((ph.width - w) // 2, (ph.height - h) // 2, (ph.width - w) // 2 + w, (ph.height - h) // 2 + h))
+
+
+_PORTRAIT_CACHE: dict[tuple, Image.Image] = {}
+
+
+def _portrait_tile(photo: Path, w: int, h: int, radius: int) -> Image.Image:
+    """Rounded-corner RGBA photo tile, computed once per (photo, size) and reused across frames."""
+    key = (str(photo), w, h)
+    with _BASE_LOCK:
+        tile = _PORTRAIT_CACHE.get(key)
+    if tile is None:
+        ph = _cover(Image.open(photo).convert("RGB"), w, h)
+        ph = ImageEnhance.Color(ph).enhance(0.85)
+        mask = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(mask).rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=255)
+        tile = ph.convert("RGBA")
+        tile.putalpha(mask)
+        with _BASE_LOCK:
+            _PORTRAIT_CACHE[key] = tile
+    return tile
 
 
 def _paste_icon(img: Image.Image, name: str | None, size: int, color, cx: float, cy: float, alpha: float = 1.0) -> bool:
@@ -216,12 +239,13 @@ def bignumber(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
         d = ImageDraw.Draw(img)
         vf = _fit_font(cfg, d, value, w * 0.86, int(min(w, h) * (0.24 if w > h else 0.17)))
         scale = 0.85 + 0.15 * _ease(t)
-        d.text((w / 2, h * 0.44), _animate_number(value, t), font=font(cfg, int(vf.size * scale)), fill=hex_to_rgb(st["accent2"]), anchor="mm")
+        d.text((w / 2, h * 0.47), _animate_number(value, t), font=font(cfg, int(vf.size * scale)), fill=hex_to_rgb(st["accent2"]), anchor="mm")
         if t > 0.35:
             a = _ease((t - 0.35) / 0.65)
-            draw_fit(cfg, d, label, (w * 0.1, h * 0.44 + vf.size * 0.65, w * 0.9, h * 0.9), int(vf.size * 0.26),
+            draw_fit(cfg, d, label, (w * 0.1, h * 0.47 + vf.size * 0.65, w * 0.9, h * 0.9), int(vf.size * 0.26),
                      _mix(hex_to_rgb(st["text"]), a), align="center", max_lines=2)
-        _paste_icon(img, spec.get("icon"), int(min(w, h) * 0.11), hex_to_rgb(st["accent"]), w / 2, h * 0.17, alpha=_ease(t))
+        isz = int(min(w, h) * 0.11)
+        _paste_icon(img, spec.get("icon"), isz, hex_to_rgb(st["accent"]), w / 2, h * TOP_SAFE + isz * 0.7, alpha=_ease(t))
         frames.append(img)
     return _save_frames(frames, out_dir)
 
@@ -312,8 +336,9 @@ def list_card(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
         d = ImageDraw.Draw(img)
         tsize = int(min(w, h) * (0.06 if not portrait else 0.05))
         x = w * 0.1
-        used = draw_fit(cfg, d, title, (x, h * 0.14, w * 0.9, h * 0.30), tsize, hex_to_rgb(st["text"]), max_lines=2)
-        y = h * 0.14 + used + tsize * 0.6
+        top = h * (TOP_SAFE + 0.01)
+        used = draw_fit(cfg, d, title, (x, top, w * 0.9, top + h * 0.16), tsize, hex_to_rgb(st["text"]), max_lines=2)
+        y = top + used + tsize * 0.6
         avail = h * 0.86 - y
         row = min(tsize * 1.9, avail / max(1, len(items)))
         isize = int(row * 0.42)
@@ -343,13 +368,15 @@ def compare(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
         tt = i / n
         img = _base(cfg, w, h, variant=variant)
         d = ImageDraw.Draw(img)
-        tsize = int(min(w, h) * (0.055 if not portrait else 0.045))
+        tsize = int(min(w, h) * (0.05 if not portrait else 0.045))
+        top = h * (TOP_SAFE + 0.01)
         if title:
-            draw_fit(cfg, d, title, (w * 0.06, h * 0.08, w * 0.94, h * 0.2), tsize, hex_to_rgb(st["text"]), align="center", max_lines=2)
+            # title sits BELOW the lower-third strip (v3.1 drew it at 8% and collided with the heading)
+            draw_fit(cfg, d, title, (w * 0.06, top, w * 0.94, top + h * 0.11), tsize, hex_to_rgb(st["text"]), align="center", max_lines=2)
         if portrait:
-            boxes = [(w * 0.08, h * 0.24, w * 0.92, h * 0.5), (w * 0.08, h * 0.55, w * 0.92, h * 0.81)]
+            boxes = [(w * 0.08, h * 0.3, w * 0.92, h * 0.54), (w * 0.08, h * 0.58, w * 0.92, h * 0.82)]
         else:
-            boxes = [(w * 0.07, h * 0.26, w * 0.48, h * 0.86), (w * 0.52, h * 0.26, w * 0.93, h * 0.86)]
+            boxes = [(w * 0.07, h * 0.31, w * 0.48, h * 0.88), (w * 0.52, h * 0.31, w * 0.93, h * 0.88)]
         for k, (side, box) in enumerate(zip((L, R), boxes)):
             a = _ease((tt - 0.25 * k) / 0.6)
             if a <= 0:
@@ -360,17 +387,21 @@ def compare(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
             d.rounded_rectangle([x0, y0, x1, y1], radius=28, fill=(20, 27, 55), outline=col, width=4)
             cx, bw, bh = (x0 + x1) / 2, x1 - x0, y1 - y0
             pad = bw * 0.06
-            # a character (Open Peep) beats an icon when the side represents a person
-            has_icon = _paste_peep(img, side.get("character"), int(bh * 0.30), cx, y0 + bh * 0.19, alpha=a) \
-                or _paste_icon(img, side.get("icon"), int(bh * 0.16), col, cx, y0 + bh * 0.16, alpha=a)
-            label_y = y0 + bh * (0.36 if has_icon else 0.12)
+            # a person gets an initial avatar (like a chat app); an option gets its icon
+            ch = side.get("character")
+            if isinstance(ch, dict) and ch.get("name"):
+                _initial_circle(cfg, d, str(ch["name"]), int(bh * 0.2), col, cx, y0 + bh * 0.17, alpha=a)
+                has_icon = True
+            else:
+                has_icon = _paste_icon(img, side.get("icon"), int(bh * 0.16), col, cx, y0 + bh * 0.16, alpha=a)
+            label_y = y0 + bh * (0.32 if has_icon else 0.12)
             draw_fit(cfg, d, str(side.get("label") or ""), (x0 + pad, label_y, x1 - pad, label_y + bh * 0.16), int(tsize * 0.8), col, align="center", max_lines=1)
             val = str(side.get("value") or "")
             vf = _fit_font(cfg, d, val, bw * 0.86, int(min(w, h) * (0.12 if not portrait else 0.09)))
-            d.text((cx, y0 + bh * (0.62 if has_icon else 0.56)), _animate_number(val, a), font=vf, fill=hex_to_rgb(st["text"]), anchor="mm")
+            d.text((cx, y0 + bh * (0.6 if has_icon else 0.54)), _animate_number(val, a), font=vf, fill=hex_to_rgb(st["text"]), anchor="mm")
             note = str(side.get("note") or "")
             if note:
-                draw_fit(cfg, d, note, (x0 + pad, y0 + bh * (0.78 if has_icon else 0.72), x1 - pad, y1 - pad), int(tsize * 0.6), (190, 200, 225), align="center", max_lines=2)
+                draw_fit(cfg, d, note, (x0 + pad, y0 + bh * (0.76 if has_icon else 0.7), x1 - pad, y1 - pad), int(tsize * 0.6), (190, 200, 225), align="center", max_lines=2)
         frames.append(img)
     return _save_frames(frames, out_dir)
 
@@ -423,12 +454,7 @@ def photo_text(cfg, spec, w, h, out_dir, photo: Path | None, variant=0) -> tuple
     st = cfg["style"]
     text = str(spec.get("text") or "")
     portrait = h > w
-    ph = Image.open(photo).convert("RGB")
-    # cover-crop
-    scale = max(w / ph.width, h / ph.height)
-    ph = ph.resize((int(ph.width * scale) + 1, int(ph.height * scale) + 1))
-    ph = ph.crop(((ph.width - w) // 2, (ph.height - h) // 2, (ph.width - w) // 2 + w, (ph.height - h) // 2 + h))
-    ph = ImageEnhance.Brightness(ph).enhance(0.75)
+    ph = ImageEnhance.Brightness(_cover(Image.open(photo).convert("RGB"), w, h)).enhance(0.75)
     if portrait:
         mask = Image.linear_gradient("L").resize((w, h))  # black top -> white bottom
         mask = mask.point(lambda v: max(0, min(255, int((v - 60) * 1.8))))
@@ -445,60 +471,69 @@ def photo_text(cfg, spec, w, h, out_dir, photo: Path | None, variant=0) -> tuple
         img = Image.composite(ph, bg, m)
         d = ImageDraw.Draw(img)
         if portrait:
-            box = (w * 0.08, h * 0.12, w * 0.92, h * 0.42)
+            box = (w * 0.08, h * (TOP_SAFE + 0.04), w * 0.92, h * 0.46)
             draw_fit(cfg, d, text, box, int(w * 0.07), _mix(hex_to_rgb(st["text"]), t), align="center", valign="middle", max_lines=4, stroke=3)
         else:
-            box = (w * 0.06, h * 0.25, w * 0.5, h * 0.75)
+            box = (w * 0.06, h * 0.27, w * 0.5, h * 0.77)
             draw_fit(cfg, d, text, box, int(h * 0.075), _mix(hex_to_rgb(st["text"]), t), align="left", valign="middle", max_lines=4, stroke=3)
         bar_w = int(w * 0.12 * t)
-        d.rectangle([w * 0.06, h * 0.22, w * 0.06 + bar_w, h * 0.22 + 6] if not portrait else [w / 2 - bar_w / 2, h * 0.09, w / 2 + bar_w / 2, h * 0.09 + 6], fill=hex_to_rgb(st["accent"]))
+        d.rectangle([w * 0.06, h * 0.24, w * 0.06 + bar_w, h * 0.24 + 6] if not portrait else
+                    [w / 2 - bar_w / 2, h * (TOP_SAFE + 0.01), w / 2 + bar_w / 2, h * (TOP_SAFE + 0.01) + 6], fill=hex_to_rgb(st["accent"]))
         frames.append(img)
     return _save_frames(frames, out_dir)
 
 
-def character(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int] | None:
-    """A named hand-drawn character (Open Peeps) with a name tag and the sentence's key line, optionally
-    a big stat. Landscape: character left, text right. Returns None if the avatar cannot be fetched."""
+def character(cfg, spec, w, h, out_dir, photo: Path | None = None, variant=0) -> tuple[Path, int]:
+    """A named person: a real portrait photo (Pexels, chosen from gender + mood) in a rounded tile with a
+    name chip, next to the sentence's key line and an optional big stat. Landscape: photo left, text right;
+    portrait: photo top, text below. Without a photo the tile becomes a large initial avatar — never a cartoon."""
     st = cfg["style"]
     ch = spec.get("character") or {"name": spec.get("name"), "gender": spec.get("gender"), "mood": spec.get("mood")}
     name = str(ch.get("name") or "").strip()
     text = str(spec.get("text") or "")
     stat = str(spec.get("stat") or "")
     portrait = h > w
-    size = int(min(w, h) * (0.62 if not portrait else 0.55))
-    if assets_remote.peep(name, str(ch.get("gender") or "neutral"), str(ch.get("mood") or "neutral"), PEEP_BASE) is None:
-        return None
+    accent = hex_to_rgb(st["accent"])
+    if portrait:
+        tw_, th_ = int(w * 0.6), int(w * 0.6)
+        tx, ty = (w - tw_) / 2, h * (TOP_SAFE + 0.03)
+        box = (w * 0.08, ty + th_ + h * 0.07, w * 0.92, h * 0.86)
+    else:
+        tw_, th_ = int(w * 0.3), int(h * 0.62)
+        tx, ty = w * 0.08, h * (TOP_SAFE + 0.03)
+        box = (w * 0.45, ty, w * 0.94, ty + th_)
+    radius = int(min(w, h) * 0.035)
+    tile = _portrait_tile(Path(photo), tw_, th_, radius) if photo and Path(photo).exists() else None
     n = int(ANIM_FPS * 0.9)
     frames = []
     for i in range(n + 1):
         t = _ease(i / n)
         img = _base(cfg, w, h, variant=variant)
         d = ImageDraw.Draw(img)
-        if portrait:
-            cx, cy = w / 2, h * 0.36
-            _paste_peep(img, ch, int(size * (0.9 + 0.1 * t)), cx, cy - (1 - t) * h * 0.03, alpha=t)
-            tag_y = cy + size * 0.5
-            box = (w * 0.08, tag_y + h * 0.06, w * 0.92, h * 0.86)
+        dx = (1 - t) * w * 0.03 * (0 if portrait else -1)
+        if tile is not None:
+            _paste_rgba(img, tile, tx + tw_ / 2 + dx, ty + th_ / 2, alpha=t)
+            d.rounded_rectangle([tx + dx, ty, tx + dx + tw_, ty + th_], radius=radius, outline=_mix(accent, t), width=4)
         else:
-            cx, cy = w * 0.27, h * 0.5
-            _paste_peep(img, ch, int(size * (0.9 + 0.1 * t)), cx - (1 - t) * w * 0.03, cy, alpha=t)
-            tag_y = cy + size * 0.5
-            box = (w * 0.5, h * 0.22, w * 0.94, h * 0.78)
-        # name tag under the character
+            d.rounded_rectangle([tx + dx, ty, tx + dx + tw_, ty + th_], radius=radius, fill=(20, 27, 55), outline=_mix(accent, t), width=4)
+            _initial_circle(cfg, d, name or "?", int(min(tw_, th_) * 0.5), accent, tx + dx + tw_ / 2, ty + th_ / 2, alpha=t)
+        # name chip overlapping the bottom edge of the tile
         if name:
-            f = font(cfg, int(min(w, h) * 0.04))
-            tw = d.textlength(name, font=f)
-            pad = int(min(w, h) * 0.015)
-            d.rounded_rectangle([cx - tw / 2 - pad * 2, tag_y - pad, cx + tw / 2 + pad * 2, tag_y + f.size + pad],
-                                radius=(f.size + 2 * pad) // 2, fill=_mix(hex_to_rgb(st["accent"]), t))
-            d.text((cx, tag_y + f.size / 2), name, font=f, fill=hex_to_rgb(st["bg_dark"]), anchor="mm")
+            f = font(cfg, int(min(w, h) * 0.038))
+            ntw = d.textlength(name, font=f)
+            pad = int(min(w, h) * 0.014)
+            cx, cy = tx + dx + tw_ / 2, ty + th_
+            d.rounded_rectangle([cx - ntw / 2 - pad * 2, cy - f.size * 0.7 - pad, cx + ntw / 2 + pad * 2, cy + f.size * 0.7 + pad],
+                                radius=(int(f.size * 1.4) + 2 * pad) // 2, fill=_mix(accent, t))
+            d.text((cx, cy), name, font=f, fill=hex_to_rgb(st["bg_dark"]), anchor="mm")
         col = _mix(hex_to_rgb(st["text"]), t)
+        tb = box
         if stat:
-            sf = _fit_font(cfg, d, stat, (box[2] - box[0]), int(min(w, h) * (0.16 if not portrait else 0.12)))
-            sx = (box[0] + box[2]) / 2 if portrait else box[0]
-            d.text((sx, box[1] + sf.size * 0.5), _animate_number(stat, t), font=sf, fill=_mix(hex_to_rgb(st["accent2"]), t), anchor="mm" if portrait else "lm")
-            box = (box[0], box[1] + sf.size * 1.3, box[2], box[3])
-        draw_fit(cfg, d, text, box, int(min(w, h) * (0.075 if not portrait else 0.065)), col,
+            sf = _fit_font(cfg, d, stat, (tb[2] - tb[0]), int(min(w, h) * (0.15 if not portrait else 0.12)))
+            sx = (tb[0] + tb[2]) / 2 if portrait else tb[0]
+            d.text((sx, tb[1] + sf.size * 0.55), _animate_number(stat, t), font=sf, fill=_mix(hex_to_rgb(st["accent2"]), t), anchor="mm" if portrait else "lm")
+            tb = (tb[0], tb[1] + sf.size * 1.3, tb[2], tb[3])
+        draw_fit(cfg, d, text, tb, int(min(w, h) * (0.07 if not portrait else 0.062)), col,
                  align="center" if portrait else "left", valign="top" if stat else "middle", max_lines=4)
         frames.append(img)
     return _save_frames(frames, out_dir)
@@ -570,11 +605,10 @@ def outro_card(cfg, w, h, out_dir) -> tuple[Path, int]:
     return _save_frames(frames, out_dir)
 
 
-RENDERERS = {
+RENDERERS = {   # character / photo_text / chart take extra args and are dispatched explicitly in render.py
     "bignumber": bignumber,
     "callout": callout,
     "icon_text": icon_text,
-    "character": character,
     "formula": formula,
     "list": list_card,
     "compare": compare,

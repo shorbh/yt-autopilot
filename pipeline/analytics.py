@@ -97,8 +97,8 @@ def retention_hints(ret: dict[str, dict]) -> list[str]:
         hints.append(f"Only {mid * 100:.0f}% of viewers reach the midpoint. Move the worked example earlier (section s2 at the latest) "
                      "and add a stronger forward tease at the end of s1 and s2.")
     if tail < 0.20 and mid >= 0.35:
-        hints.append(f"Only {tail * 100:.0f}% reach the last 10%. Make the final section shorter and end on the action rule plus the "
-                     "next-video tease; no wind-down language.")
+        hints.append(f"Only {tail * 100:.0f}% reach the last 10%. Make the final section shorter and end on the action rule, "
+                     "a generic (topic-free) tease and the sign-off; no wind-down language.")
     return hints
 
 

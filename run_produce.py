@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pipeline.config import BUILD, load_config
-from pipeline.render import build_long_video, build_shorts, thumbnail
+from pipeline.render import build_long_video, build_shorts, contact_sheet, thumbnail
 from pipeline.script import generate_script, word_count
 from pipeline.state import record_published
 from pipeline.topics import pick_topic
@@ -39,10 +39,9 @@ def main() -> int:
     cfg = load_config()
     t0 = time.time()
 
-    pick = pick_topic()
-    if args.topic:
-        pick["topic"] = args.topic
-    print(f"[1/5] Topic: {pick['topic']}  ({pick['category']} · {pick['format'].split(':')[0]})")
+    # forced topic skips the trend scan (saves an LLM call); otherwise trend scout first, evergreen bank second
+    pick = pick_topic(cfg=cfg, forced=args.topic or None)
+    print(f"[1/5] Topic: {pick['topic']}  ({pick['category']} · {pick['format'].split(':')[0]} · {pick.get('source', 'bank')})")
 
     script = generate_script(cfg, pick)
     print(f"[2/5] Script: '{script['title']}'  ~{word_count(script)} words  ({time.time()-t0:.0f}s)")
@@ -55,6 +54,7 @@ def main() -> int:
     long = build_long_video(cfg, script, workdir)
     print(f"[3/5] Long video rendered: {long['duration']/60:.1f} min in {time.time()-t1:.0f}s -> {long['path']}")
     thumb = thumbnail(cfg, script, workdir)
+    contact_sheet(Path(long["path"]), workdir / "contact_sheet.jpg")   # one frame per 6 s, tiled — for visual QA
 
     t2 = time.time()
     shorts = [] if args.no_shorts else build_shorts(cfg, script, workdir)
@@ -79,7 +79,8 @@ def main() -> int:
     long_id = upload_video(cfg, Path(long["path"]), script["title"], desc, script["tags"],
                            publish_at(cfg, 0, pub["long_publish_hour"]), thumbnail=thumb)
     record_published({"kind": "long", "video_id": long_id, "title": script["title"], "topic": pick["topic"],
-                      "category": pick["category"], "format": pick["format"], "duration": long["duration"]})
+                      "category": pick["category"], "format": pick["format"], "duration": long["duration"],
+                      "source": pick.get("source", "bank"), "headline": pick.get("headline", "")})
     print(f"[5/5] Uploaded long video: https://youtu.be/{long_id}")
 
     for i, sh in enumerate(shorts):

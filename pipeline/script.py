@@ -21,7 +21,12 @@ Retention rules (these decide whether the algorithm recommends the video):
 - MICRO-HOOKS: every section except 'close' ends with a one-sentence forward tease that opens a
   curiosity gap ("and the second mistake costs even more", "the twist is in year three"). Never a summary.
 - TAIL: the 'close' section never says "in summary", "to recap", "that's all" or fades out. It delivers the
-  action rule, then ONE sentence teasing a related topic the viewer should watch next, then the sign-off.
+  action rule in two or three sentences, then ONE generic forward tease, then the sign-off.
+  The tease must NOT name a topic, product, number or event (next week's subject is chosen from the news):
+  good: "Next week I'm pulling apart a money habit that looks smart and quietly isn't."
+        "There's a mechanic almost nobody checks until it's cost them — that's next."
+        "Next week's one is the kind of thing you'll wish someone had told you at twenty-five."
+  bad: anything mentioning mortgages, taxes, the Fed, a company, a percentage or a dollar figure.
 - Any named person keeps the same name, gender and pronouns throughout; state gender implicitly via pronouns.
 Return ONLY valid JSON matching the schema requested."""
 
@@ -29,9 +34,7 @@ SCHEMA = """{
   "title": "<= 60 chars, curiosity + specific number or contrast, no clickbait lies",
   "alt_titles": ["2 alternative titles"],
   "thumbnail_text": "2-4 words, all caps, punchy, with a number or contrast (e.g. '1% = $180,000')",
-  "thumbnail_query": "2-4 word stock photo search, object/scene not a face (e.g. 'stack of coins desk')",
-  "thumbnail_mood": "expression for the cartoon character on the thumbnail: shocked | worried | excited | thinking",
-  "thumbnail_character": {"name": "the video's main character or 'viewer'", "gender": "female | male | neutral"},
+  "thumbnail_query": "2-4 word stock photo search for a striking, high-contrast image (an object, scene or a person's expressive face, e.g. 'shocked woman reading bill')",
   "description": "150-250 words. First line is a hook. Include 3 timestamps placeholders like [00:00], a one-line disclaimer, and a call to subscribe. No links.",
   "tags": ["12-18 lowercase tags"],
   "sections": [
@@ -48,7 +51,7 @@ SCHEMA = """{
     {"id": "s3", "...": "..."},
     {"id": "s4", "...": "..."},
     {"id": "s5", "...": "..."},
-    {"id": "close", "heading": "...", "narration": "50-80 words: the action rule (no recap), one sentence teasing the next topic to watch, then EXACTLY this sign-off text: {signoff}", "visual_query": "...", "stat": null, "short_worthy": false}
+    {"id": "close", "heading": "...", "narration": "50-80 words: the action rule (no recap), one GENERIC forward tease that names no topic, then EXACTLY this sign-off text: {signoff}", "visual_query": "...", "stat": null, "short_worthy": false}
   ],
   "chart": {
     "type": "line | bar",
@@ -72,6 +75,10 @@ def generate_script(cfg: dict, pick: dict) -> dict:
     target_words = int(cfg["video"]["target_minutes"] * 150)  # ~150 wpm spoken
     hints = load_performance().get("script_hints") or []
     hint_block = ("\nLESSONS FROM THIS CHANNEL'S RETENTION DATA (apply them):\n- " + "\n- ".join(hints) + "\n") if hints else ""
+    news_block = ""
+    if pick.get("news_hook"):
+        news_block = (f"\nNEWS HOOK (this week's event; use it in the hook and title so the video rides the search wave, "
+                      f"but explain the underlying mechanism so the video stays useful for years): {pick['news_hook']}\n")
     user = f"""Channel: {ch['name']} — {ch['tagline']}{hint_block}
 Niche: {ch['niche']}
 Audience: {ch['audience']}
@@ -79,14 +86,14 @@ Sign-off (must appear verbatim at the end of the 'close' section): {ch['signoff'
 
 TOPIC: {pick['topic']}
 CATEGORY: {pick['category']}
-FORMAT TO FOLLOW: {pick['format']}
+FORMAT TO FOLLOW: {pick['format']}{news_block}
 
 Total narration length across all sections: about {target_words} words (±10%).
 Use 7 sections total: hook, s1..s5, close. Mark exactly 1-2 sections as short_worthy.
 The 'chart' must visualise the video's core worked example with 1-2 series and 4-12 points each; make the numbers consistent with the narration.
 Both chart series MUST be in the same unit and a similar magnitude (e.g. two dollar balances), never a price next to a total value — otherwise one line is flat.
 'thumbnail_text' must be 2-4 words containing a number or a stark contrast (e.g. '$50K TO EXERCISE', '1% = $100,000', 'RSUs VS OPTIONS').
-Also return 'thumbnail_query': a 2-4 word stock-photo search for the thumbnail background (an object or scene, not a person's face).
+Also return 'thumbnail_query': a 2-4 word stock-photo search for the thumbnail background (a striking object, scene, or an expressive face that matches the emotion of the title).
 The three Shorts must each be a different angle on the topic (the number, the mistake, the rule) and must NOT repeat the long video's sentences.
 
 Return JSON exactly matching this schema:

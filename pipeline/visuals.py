@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import math
 import random
 from pathlib import Path
 
@@ -102,6 +103,22 @@ def stat_card(cfg: dict, label: str, value: str, w: int, h: int, out: Path) -> P
     return out
 
 
+def _nice_step(span: float, target_ticks: int) -> float:
+    """Axis step that is 1, 2, 2.5 or 5 x 10^k and gives about `target_ticks` intervals."""
+    if span <= 0:
+        return 1.0
+    raw = span / max(1, target_ticks)
+    mag = 10 ** math.floor(math.log10(raw))
+    for m in (1, 2, 2.5, 5, 10):
+        if m * mag >= raw:
+            return m * mag
+    return 10 * mag
+
+
+def _fmt_tick(v: float) -> str:
+    return f"{v:,.0f}" if abs(v - round(v)) < 1e-9 else f"{v:,.1f}"
+
+
 def _coerce_series(raw: list) -> list[dict]:
     series = [
         {**s, "points": [(float(str(p[0]).replace(",", "").lstrip("$")), float(str(p[1]).replace(",", "").lstrip("$"))) for p in s["points"]]}
@@ -129,11 +146,14 @@ def chart_image(cfg: dict, chart: dict, w: int, h: int, out: Path) -> Path | Non
     st = cfg["style"]
     img = gradient(w, h, st["bg_dark"], st["bg_dark2"], noise=False)
     d = ImageDraw.Draw(img)
-    pad_l, pad_r, pad_t, pad_b = int(w * 0.12), int(w * 0.06), int(h * 0.18), int(h * 0.14)
+    # top padding clears the lower-third heading strip (motion.TOP_SAFE); title + legend live in 0.17h..0.27h
+    pad_l, pad_r, pad_t, pad_b = int(w * 0.12), int(w * 0.06), int(h * 0.29), int(h * 0.14)
     x0, y0, x1, y1 = pad_l, pad_t, w - pad_r, h - pad_b
-    ymin, ymax = min(0, min(ys)), max(ys) * 1.08 or 1
-    if ymax <= ymin:  # e.g. all-negative or all-zero data; avoid a zero/negative range
-        ymax = ymin + 1
+    ystep = _nice_step((max(ys) - min(0, min(ys))) or 1, 5)
+    ymin = math.floor(min(0, min(ys)) / ystep) * ystep
+    ymax = math.ceil(max(ys) * 1.04 / ystep) * ystep
+    if ymax <= ymin:  # e.g. all-zero data; avoid a zero/negative range
+        ymax = ymin + ystep
     xmin, xmax = min(xs), max(xs)
 
     def X(v):
@@ -145,16 +165,26 @@ def chart_image(cfg: dict, chart: dict, w: int, h: int, out: Path) -> Path | Non
     grid = (60, 70, 100)
     small = font(cfg, int(h * 0.028))
     y_prefix, y_suffix = str(chart.get("y_prefix") or ""), str(chart.get("y_suffix") or "")  # LLMs may emit null
-    for i in range(6):
-        gy = y0 + (y1 - y0) * i / 5
+    val = ymin
+    while val <= ymax + ystep * 0.01:   # round-number ticks: 0, 20,000, 40,000 ... never "1,368"
+        gy = Y(val)
         d.line([(x0, gy), (x1, gy)], fill=grid, width=2)
-        val = ymax - (ymax - ymin) * i / 5
-        d.text((x0 - 14, gy), f"{y_prefix}{val:,.0f}{y_suffix}", font=small, fill=(180, 190, 210), anchor="rm")
-    for i in range(6):
-        gx = x0 + (x1 - x0) * i / 5
-        d.text((gx, y1 + 12), f"{xmin + (xmax - xmin) * i / 5:,.0f}", font=small, fill=(180, 190, 210), anchor="mt")
+        d.text((x0 - 14, gy), f"{y_prefix}{_fmt_tick(val)}{y_suffix}", font=small, fill=(180, 190, 210), anchor="rm")
+        val += ystep
+    xstep = _nice_step(xmax - xmin, 8)
+    xv = math.ceil(xmin / xstep) * xstep
+    while xv <= xmax + xstep * 0.01:
+        d.text((X(xv), y1 + 12), _fmt_tick(xv), font=small, fill=(180, 190, 210), anchor="mt")
+        xv += xstep
     d.text(((x0 + x1) / 2, h - pad_b * 0.35), str(chart.get("x_label") or ""), font=small, fill=(200, 205, 220), anchor="mm")
-    d.text((x0, pad_t * 0.45), str(chart.get("title") or "")[:80], font=font(cfg, int(h * 0.05)), fill=hex_to_rgb(st["text"]), anchor="lm")
+    title = str(chart.get("title") or "")[:80]
+    tf = font(cfg, int(h * 0.05))
+    title_w = (x1 - int(w * 0.24)) - x0           # leave the right quarter for the legend
+    while d.textlength(title, font=tf) > title_w and tf.size > int(h * 0.03):
+        tf = font(cfg, tf.size - 2)
+    while d.textlength(title, font=tf) > title_w and len(title) > 8:
+        title = title[:-2].rstrip() + "…"
+    d.text((x0, h * 0.19), title, font=tf, fill=hex_to_rgb(st["text"]), anchor="lm")
 
     colors = [hex_to_rgb(st["accent"]), hex_to_rgb(st["accent2"]), (120, 170, 255), (255, 120, 150)]
     ctype = chart.get("type", "line")
@@ -173,8 +203,8 @@ def chart_image(cfg: dict, chart: dict, w: int, h: int, out: Path) -> Path | Non
                 d.line(line, fill=col, width=int(h * 0.008), joint="curve")
             for lx, ly in line:
                 d.ellipse([lx - 7, ly - 7, lx + 7, ly + 7], fill=col)
-        # legend
-        ly = pad_t * 0.9 + si * int(h * 0.045)
+        # legend (top-right, same band as the title)
+        ly = h * 0.17 + si * int(h * 0.045)
         d.rectangle([x1 - int(w * 0.22), ly - 10, x1 - int(w * 0.22) + 30, ly + 10], fill=col)
         d.text((x1 - int(w * 0.22) + 44, ly), str(s.get("name", ""))[:28], font=small, fill=(230, 235, 245), anchor="lm")
     img.save(out, "PNG")
@@ -197,6 +227,39 @@ def lower_third(cfg: dict, text: str, w: int, h: int, out: Path, center: bool = 
     d.rounded_rectangle([x, y, x + tw + pad * 2, y + f.size + pad * 2], radius=14, fill=(11, 16, 32, 200))
     d.rectangle([x, y, x + 8, y + f.size + pad * 2], fill=hex_to_rgb(cfg["style"]["accent"]) + (255,))
     d.text((x + pad + 10, y + pad), text, font=f, fill=(255, 255, 255, 255))
+    img.save(out, "PNG")
+    return out
+
+
+def broll_overlay(cfg: dict, phrase: str, w: int, h: int, out: Path, base: Path | None) -> Path:
+    """Overlay for b-roll beats: the section lower third (base) PLUS the sentence's key phrase on a soft
+    dark gradient, so footage never plays as a wordless gap (v3.1 audit: 6 s of a car bonnet, no text)."""
+    from .motion import TOP_SAFE, draw_fit
+    img = Image.open(base).convert("RGBA") if base and Path(base).exists() else Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    portrait = h > w
+    shade = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shade)
+    if portrait:
+        y0, y1 = int(h * TOP_SAFE), int(h * 0.5)
+        for y in range(y0, y1):  # vertical ramp: dark under the text, clear below
+            a = int(150 * (1 - (y - y0) / (y1 - y0)))
+            sd.line([(0, y), (w, y)], fill=(11, 16, 32, a))
+        box = (w * 0.08, h * (TOP_SAFE + 0.03), w * 0.92, h * 0.44)
+    else:
+        x1 = int(w * 0.6)
+        for x in range(0, x1):    # horizontal ramp: dark on the left, clear on the right
+            a = int(170 * (1 - x / x1))
+            sd.line([(x, 0), (x, h)], fill=(11, 16, 32, a))
+        box = (w * 0.06, h * 0.3, w * 0.52, h * 0.74)
+    img = Image.alpha_composite(img, shade)
+    d = ImageDraw.Draw(img)
+    draw_fit(cfg, d, phrase, box, int(min(w, h) * (0.075 if not portrait else 0.068)), (255, 255, 255, 255),
+             align="center" if portrait else "left", valign="middle", max_lines=4, stroke=3)
+    accent = hex_to_rgb(cfg["style"]["accent"]) + (255,)
+    if portrait:
+        d.rectangle([w / 2 - w * 0.06, box[1] - 14, w / 2 + w * 0.06, box[1] - 8], fill=accent)
+    else:
+        d.rectangle([box[0], box[1] - 20, box[0] + w * 0.12, box[1] - 14], fill=accent)
     img.save(out, "PNG")
     return out
 
@@ -234,10 +297,12 @@ def pexels_video(query: str, min_seconds: float, out: Path, portrait: bool = Fal
     return None
 
 
-def pexels_photo(query: str, out: Path, portrait: bool = False) -> Path | None:
+def pexels_photos(query: str, outs: list[Path], portrait: bool = False) -> list[Path]:
+    """Download up to len(outs) DIFFERENT photos for one query with a single search call.
+    Returns the paths that succeeded (possibly fewer than requested, possibly empty)."""
     key = env("PEXELS_API_KEY")
-    if not key:
-        return None
+    if not key or not outs:
+        return []
     try:
         r = requests.get(
             "https://api.pexels.com/v1/search",
@@ -247,13 +312,23 @@ def pexels_photo(query: str, out: Path, portrait: bool = False) -> Path | None:
         )
         r.raise_for_status()
         photos = r.json().get("photos", [])
-        if not photos:
-            return None
-        url = random.choice(photos)["src"]["large2x"]
-        dl = requests.get(url, timeout=60)
-        dl.raise_for_status()
-        img = Image.open(io.BytesIO(dl.content)).convert("RGB")
-        img.save(out, "JPEG", quality=90)
-        return out
-    except (requests.RequestException, OSError):
-        return None
+    except requests.RequestException:
+        return []
+    if not photos:
+        return []
+    random.shuffle(photos)
+    got: list[Path] = []
+    for p, out in zip(photos, outs):
+        try:
+            dl = requests.get(p["src"]["large2x"], timeout=60)
+            dl.raise_for_status()
+            Image.open(io.BytesIO(dl.content)).convert("RGB").save(out, "JPEG", quality=90)
+            got.append(out)
+        except (requests.RequestException, OSError, KeyError):
+            continue
+    return got
+
+
+def pexels_photo(query: str, out: Path, portrait: bool = False) -> Path | None:
+    got = pexels_photos(query, [out], portrait)
+    return got[0] if got else None

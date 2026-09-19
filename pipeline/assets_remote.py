@@ -1,26 +1,24 @@
 """Free remote visual assets, all cached per run and all failure-tolerant (return None -> caller falls back).
 
 * Lucide icons (ISC licence): SVG from jsDelivr, rasterised with cairosvg. ~1,600 names.
-* Characters: DiceBear "Open Peeps" (Pablo Stanley, CC0) — hand-drawn half-body people via the free
-  DiceBear HTTP API (SVG, no key). Hairstyle/facial-hair sets are chosen from the stated gender so a
-  "Sarah" is never drawn as a man; expression is chosen from a mood word.
+
+People are NOT drawn here any more. v3.2 replaced the hand-drawn Open Peeps cartoons with real
+Pexels portrait photos (see render._BrollCache.person) plus typographic initial avatars in
+compare cards (motion._initial_circle). Both look premium next to the photo b-roll; cartoons did not.
 """
 from __future__ import annotations
 
-import hashlib
 import io
 import re
 import threading
-import urllib.parse
 
 import requests
 from PIL import Image
 
 _ICON_CACHE: dict[tuple, Image.Image | None] = {}
-_SVG_CACHE: dict[str, str | None] = {}   # one download per icon name / peep spec
+_SVG_CACHE: dict[str, str | None] = {}   # one download per icon name
 _LOCK = threading.Lock()
 _LUCIDE_URL = "https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/{name}.svg"
-_PEEPS_URL = "https://api.dicebear.com/9.x/open-peeps/svg"
 
 try:
     import cairosvg  # type: ignore
@@ -82,55 +80,19 @@ def icon(name: str, size: int, color: tuple[int, int, int]) -> Image.Image | Non
     return img
 
 
-# ------------------------------------------------------------------ characters (Open Peeps)
+# ------------------------------------------------------------------ people -> stock-photo queries
 
-_HEADS = {
-    "female": ["long", "longBangs", "longCurly", "bun", "buns", "bangs", "mediumBangs", "mediumStraight", "longAfro", "twists", "hijab"],
-    "male": ["short1", "short2", "short3", "short4", "short5", "flatTop", "pomp", "shaved1", "noHair1", "dreads1", "mohawk"],
-    "neutral": ["short2", "medium1", "medium2", "bangs2", "twists2", "shaved3"],
+_MOOD_WORDS = {
+    "neutral": "portrait", "happy": "smiling", "excited": "celebrating", "proud": "confident",
+    "worried": "worried", "sad": "sad", "stressed": "stressed", "shocked": "surprised", "surprised": "surprised",
+    "scared": "anxious", "angry": "frustrated", "thinking": "thinking", "serious": "serious",
+    "explaining": "talking", "confused": "confused", "tired": "tired", "laughing": "laughing",
 }
-_FACES = {
-    "neutral": "calm", "happy": "smile", "excited": "smileBig", "proud": "smileBig",
-    "worried": "concerned", "sad": "solemn", "stressed": "tired", "shocked": "awe", "surprised": "awe",
-    "scared": "fear", "angry": "veryAngry", "thinking": "driven", "serious": "serious", "explaining": "explaining",
-    "confused": "suspicious", "tired": "tired", "laughing": "smileLOL",
-}
-_SKINS = ["ffdbb4", "edb98a", "d08b5b", "ae5d29", "694d3d"]
-_CLOTHES = ["3ddc97", "ffd166", "8fb4ff", "e879a5", "9be7d8"]
 
 
-def _pick(seq: list[str], seed: str) -> str:
-    h = int(hashlib.md5(seed.encode("utf-8")).hexdigest(), 16)
-    return seq[h % len(seq)]
-
-
-def peep(name: str, gender: str = "neutral", mood: str = "neutral", size: int = 600) -> Image.Image | None:
-    """Hand-drawn character (Open Peeps). Same name -> same person every time within and across videos."""
-    if not HAVE_CAIRO:
-        return None
-    gender = (gender or "neutral").lower()
-    gender = "female" if gender.startswith(("f", "w", "g")) else ("male" if gender.startswith(("m", "b")) else "neutral")
-    face = _FACES.get((mood or "neutral").lower(), "calm")
-    seed = (name or "person").strip().lower()
-    params = {
-        "seed": seed,
-        "head": _pick(_HEADS[gender], seed),
-        "face": face,
-        "skinColor": _pick(_SKINS, seed + "skin"),
-        "clothingColor": _pick(_CLOTHES, seed + "cloth"),
-        "facialHairProbability": 0 if gender != "male" else 35,
-        "accessoriesProbability": 15,
-        "maskProbability": 0,      # API default is 5% -> a medical mask would hide the mood expression
-        # no `size` param and no backgroundColor: the SVG is fetched ONCE per person and rasterised
-        # at any pixel size by cairosvg (keeps the network cache warm across animated size changes).
-    }
-    url = _PEEPS_URL + "?" + urllib.parse.urlencode(params)
-    key = ("peep", url, size)
-    with _LOCK:
-        if key in _ICON_CACHE:
-            return _ICON_CACHE[key]
-    svg = _fetch_svg("peep:" + url, url)
-    img = _rasterise(svg, size, size) if svg else None
-    with _LOCK:
-        _ICON_CACHE[key] = img
-    return img
+def person_query(gender: str | None, mood: str | None) -> str:
+    """'female' + 'worried' -> 'worried woman portrait' (a Pexels search that reliably returns one person)."""
+    g = (gender or "neutral").lower()
+    who = "woman" if g.startswith(("f", "w", "g")) else ("man" if g.startswith(("m", "b")) else "person")
+    m = _MOOD_WORDS.get((mood or "neutral").lower(), "portrait")
+    return f"{m} {who} portrait" if m != "portrait" else f"{who} portrait office"

@@ -31,7 +31,20 @@ video:
   b_roll: "auto"             # auto = Pexels if PEXELS_API_KEY set, else generated slides
   music: false               # keep false unless you add royalty-free tracks to assets/music/
   outro: true                # 6 s end screen (subscribe CTA) after the close section
-  thumbnail_character: true  # hand-drawn character with an emotional face on the thumbnail (Open Peeps, CC0)
+
+topics:
+  trends: true               # scan Google News + Google Trends RSS (free, no key) before picking from the bank
+  trend_min_fit: 7           # 0-10 score from the LLM; below this the evergreen bank is used
+  trend_queries:             # Google News searches (last 7 days, US edition)
+    - "mortgage rates"
+    - "Fed interest rate decision"
+    - "inflation report CPI"
+    - "401k OR IRA OR Roth"
+    - "student loans"
+    - "credit card debt"
+    - "tax refund OR IRS"
+    - "housing market"
+    - "stock market"
 
 shorts:
   count: 3

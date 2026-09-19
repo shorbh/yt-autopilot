@@ -67,6 +67,7 @@ jobs:
             build/**/long.mp4
             build/**/short.mp4
             build/**/thumbnail*.jpg
+            build/**/contact_sheet.jpg
             build/**/script.json
             build/**/captions.ass
           retention-days: 3

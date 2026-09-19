@@ -81,18 +81,22 @@ GitHub Actions (cron)
 │     reports/latest.md (also shown in the Actions job summary) → git commit
 │
 └─ Monday 06:00 UTC  produce.yml  →  run_produce.py
-      1. pipeline/topics.py    pick unused topic (weighted by performance), rotate 7 formats
+      1. pipeline/trends.py    Google News + Google Trends RSS (free) → LLM "fit" score; a trend topic is used
+                               only when fit ≥ 7 AND it can be told as an evergreen mechanism
+         pipeline/topics.py    otherwise: pick unused bank topic (weighted by performance); rotate 7 formats
       2. pipeline/script.py    LLM → strict JSON: title, 7 sections, chart data, 3 Shorts,
                                description, tags, thumbnail text   (pipeline/llm.py: provider chain)
+                               (close = action rule + GENERIC tease that names no topic + sign-off)
       3. pipeline/tts.py       edge-tts per section → mp3 + word timings; concat + loudnorm
          pipeline/storyboard.py LLM splits each section into beats (1-2 sentences) + a visual spec
          pipeline/motion.py    animated PIL cards: bignumber | compare | list | formula | callout | icon_text |
-                               photo_text | character | timeline | chart | chapter | outro  (text always fitted)
-         pipeline/assets_remote.py  Lucide icons (jsDelivr + cairosvg), Open Peeps characters (DiceBear API)
-         pipeline/visuals.py   static helpers, chart drawing, Pexels b-roll/photos, lower-third / Shorts title
-         pipeline/render.py    beat timing from word boundaries → one clip per beat (fade) → concat
+                               photo_text | character (real portrait photo) | timeline | chart | chapter | outro
+                               (text always fitted; nothing drawn above TOP_SAFE = 16% — the lower-third strip)
+         pipeline/assets_remote.py  Lucide icons (jsDelivr + cairosvg); person_query() gender+mood → Pexels search
+         pipeline/visuals.py   chart drawing (nice ticks), Pexels b-roll/photos, lower-third, b-roll phrase overlay
+         pipeline/render.py    beat timing from word boundaries → one clip per beat (fade from navy) → concat
                                → voice (+ music bed) → karaoke ASS captions → long.mp4
-                               3 × short.mp4 (1080×1920)   +  thumbnail.jpg (split layout)
+                               3 × short.mp4 (1080×1920) + thumbnail A/B/C (photo + fitted type) + contact_sheet.jpg
       4. pipeline/upload.py    YouTube Data API v3 resumable upload, private + publishAt,
                                containsSyntheticMedia=true, thumbnail set
       5. pipeline/state.py     data/published.json → git commit (so topics never repeat)
@@ -102,7 +106,7 @@ GitHub Actions (cron)
 
 | File | Purpose |
 |---|---|
-| `config.yaml` | channel name/tagline/niche/sign-off, voice, video length, cadence hours, colours, LLM models |
+| `config.yaml` | channel name/tagline/niche/sign-off, voice, video length, cadence hours, colours, LLM models, `topics.trends` on/off + news queries + `trend_min_fit` |
 | `data/topics.json` | 7 categories × ~7 seed topics + 7 rotating formats; auto-refilled weekly |
 | `.github/workflows/produce.yml` | cron for production (change to `0 6 * * 1,3,5` for 3×/week) |
 | `.github/workflows/weekly_review.yml` | cron for analytics review |
@@ -181,6 +185,10 @@ Channel description in use:
 8. **Google Cloud console buttons shift when promo banners appear** — click by finding the element, not by remembered position, and verify the result.
 9. **edge-tts may be rate-limited from GitHub's datacenter IPs.** Retries are built in; if a run still fails at TTS, just re-run the workflow.
 10. **Custom thumbnails need a phone-verified channel**, otherwise the API returns 403 and the code logs a warning and continues.
+11. **Cartoon/illustration layers do not survive contact with real photo b-roll.** Two attempts (Pollinations AI sketches, then Open Peeps) both looked cheap next to Pexels footage. What works: real portrait photos for people, typographic initial avatars in compare cards, icons for concepts. Don't reintroduce a cartoon layer without an A/B on CTR.
+12. **Every card renderer must respect `motion.TOP_SAFE`.** The section heading overlay occupies the top ~14% of the frame; any title drawn there collides (run #6: compare and chart titles). New renderers start content at `h * (TOP_SAFE + 0.01)`.
+13. **`fade=t=in` fades from black by default.** On a navy card that reads as a dropout; always pass `color=0x0B1020` (brand bg).
+14. **Audit from the contact sheet, not the mp4.** `contact_sheet.jpg` (one frame per 6 s) is in every dry-run artifact; the whole video is reviewable in one image.
 
 ---
 
@@ -272,7 +280,8 @@ Several statistics in the report are unsourced; treat them as directional.
 
 ## 10. Open items / next steps
 
-- [ ] **Review the dry-run output** (artifact of run #3): voice, caption size, chart/stat-card look, thumbnail text.
+- [ ] **Run #7 dry run (v3.2)** and review `contact_sheet.jpg` + thumbnails A/B/C: portrait cards, no title collisions, b-roll phrases, chart ticks, no black dip on bignumber.
+- [ ] Check the run log's `[trends]` line: did a news topic qualify (fit ≥ 7) or did it fall back to the bank? Tune `topics.trend_queries` / `trend_min_fit` if it fires too often or never.
 - [ ] Decide: wait for the Monday cron, or trigger the first real upload now.
 - [ ] Retry the custom handle (`@MoneyMechanics…`) now that the channel is phone-verified.
 - [ ] Consider switching the cron to 3×/week before Feb 2027 (STRATEGY.md).
@@ -296,6 +305,8 @@ Several statistics in the report are unsourced; treat them as directional.
 | 2026-09-17 | `render.py` caption fallback + stats; `tts.py` explicit WordBoundary; `produce.yml` unbuffered logs + always-upload artifact | Run #2 caption burn-in failure |
 | 2026-09-18 | Dry-run #3 succeeded end-to-end (14m 51s) | First verified full render |
 | 2026-09-18 | Added this PLAYBOOK.md | Documentation for maintenance and cloning |
+| 2026-09-19 | **v3.2 — photos not cartoons, layout safe zone, trend scout, contact sheet.** Frame-by-frame audit of run #6 (68 frames) found: compare-card and chart titles overlapping the section heading; a 6 s wordless b-roll shot; a black dip + lonely "0" at the start of a count-up; odd chart ticks ("$1,368"); Open Peeps judged cartoonish by the user; thumbnail C cut at 30 chars. Changes: (1) **Open Peeps removed** — `character` beats now show a real Pexels portrait (query built from gender + mood by `assets_remote.person_query`; first appearance pins the face for the whole video via `_BrollCache.person`); `compare` people become initial-circle avatars; thumbnails are photo + fitted type (A primary, B second photo, C alt title — full text, 1–3 lines via `fit_text_box`). (2) **`motion.TOP_SAFE` = 16%**: every card, the chart title/legend and photo cards start below the heading strip. (3) B-roll beats always carry the sentence's key phrase (`visuals.broll_overlay`, merged into the lower-third overlay — no extra ffmpeg pass). (4) Fades from brand navy (`FADE_COLOR`), count-ups start at 10%. (5) Chart axes use nice steps (1/2/2.5/5 × 10ⁿ), title width-limited so it never runs under the legend. (6) **Trend scout** (`pipeline/trends.py`): Google News RSS for the finance queries in `config.yaml` + Google Trends US RSS, fetched concurrently (~2 s), LLM scores one candidate 0–10; used when fit ≥ `trend_min_fit` (7) and phrased as an evergreen mechanism; the script gets a `NEWS HOOK` line; `published.json` records `source` and `headline`. Any failure → bank. (7) **Generic next-video tease**: the close keeps a one-line curiosity gap ("a money habit that looks smart and quietly isn't") but must not name a topic, number or event, so Monday's slot stays free for the news (user decision); retention hint text updated to match. (8) `contact_sheet.jpg` (1 frame / 6 s, 6-wide grid, one ffmpeg call) in every dry-run artifact. `--topic` now works even with an exhausted bank. | User review of run #6 + request to react to real-world events instead of pre-committing topics. |
+| 2026-09-19 | Dry-run #6 (v3.1): **313 s total** (long 5.7 min in 222 s; 3 Shorts in 79 s), zero warnings. Mix: 51 beats @ 6.4 s — 18 icon_text, 8 photo_text, 8 callout (16%), 7 bignumber, 3 character, 3 compare, chart, list, 2 broll. Artifact includes thumbnail A/B/C. | Callout cap and character layer verified in production. |
 | 2026-09-19 | Perf: characters/icons rasterised once at a base size (1024 / 512 px) and resized with PIL per animation frame instead of re-running cairo for every size; warm-up now pre-rasterises at those exact sizes. | Animated size changes were triggering ~14 cairo renders per character beat. |
 | 2026-09-19 | **Research gaps closed.** Script prompt: hook speaks the title keywords in the first two sentences; every section ends with a one-sentence forward tease (micro-hook); close = action rule → next-topic tease → sign-off, never "in summary". Thumbnails: A (primary) + B (different expression) + C (alt title, no character) saved to the artifact for Studio's *Test & Compare* (API cannot set variants). Music: real sidechain ducking (music dips under speech). **Retention diagnostics**: weekly review pulls the `audienceWatchRatio` curve per recent video (nose 5% / mid 50% / tail 90%), prints a table, and converts weak spots into `script_hints` in `performance.json`, which `generate_script` injects into the next script prompt — the channel now corrects its own hooks and endings from data. | Point-by-point audit of the external research (§9b). |
 | 2026-09-19 | **v3.1 — characters instead of AI sketches.** Review of run #5: Pollinations sketches were off-topic, washed out and watermarked; "Sarah" drawn as a man; still ~50% text cards. Removed Pollinations entirely. Added `assets_remote.peep()` — DiceBear **Open Peeps** (Pablo Stanley, CC0, free HTTP API, SVG → cairosvg): hand-drawn half-body people, hairstyle/facial-hair chosen from the script's stated gender, expression from a mood word, same name → same person. New `character` card (avatar + name tag + line + optional stat); `compare` sides accept `character`. Storyboard: `character` type replaces `illustration`; hard cap of 25% plain callouts; first hook beat forced visual (bignumber if a number is spoken, else photo). Thumbnail gets a Peep with a shocked/worried face (the "emotional face" CTR lever from the research). Asset caches warmed concurrently before rendering. | User feedback + external research (retention nose/body/tail, QCR, emotional thumbnails). |

@@ -17,12 +17,31 @@ def _weighted_choice(items: list[str], scores: dict, floor: float = 0.5) -> str:
     return random.choices(items, weights=weights, k=1)[0]
 
 
-def pick_topic(seed: int | None = None) -> dict:
+def pick_topic(seed: int | None = None, cfg: dict | None = None, forced: str | None = None) -> dict:
+    """Trend first (if something in this week's news fits the channel), evergreen bank otherwise.
+    `forced` skips both (used by --topic / workflow_dispatch) and works even when the bank is exhausted.
+    Returns {category, topic, format, source: 'trend'|'bank'|'forced', news_hook?}."""
     if seed is not None:
         random.seed(seed)
     bank = load_bank()
-    used_titles = {p.get("topic") for p in load_published()}
+    published = load_published()
+    used_titles = {p.get("topic") for p in published}
     perf = load_performance()
+
+    recent_formats = [p.get("format") for p in published[-3:]]
+    formats = [f for f in bank["formats"] if f not in recent_formats] or bank["formats"]
+    fmt = _weighted_choice(formats, perf.get("format_scores", {}))
+
+    if forced:
+        cats = list(bank["categories"])
+        return {"category": _weighted_choice(cats, perf.get("category_scores", {})), "topic": forced, "format": fmt, "source": "forced"}
+
+    if cfg is not None:
+        from .trends import scout
+        hit = scout(cfg, list(bank["categories"]), [str(t) for t in used_titles if t])
+        if hit:
+            return {"category": hit["category"], "topic": hit["topic"], "format": fmt, "source": "trend",
+                    "news_hook": hit["news_hook"], "headline": hit["headline"]}
 
     categories = {c: [t for t in ts if t not in used_titles] for c, ts in bank["categories"].items()}
     categories = {c: ts for c, ts in categories.items() if ts}
@@ -31,12 +50,7 @@ def pick_topic(seed: int | None = None) -> dict:
 
     category = _weighted_choice(list(categories), perf.get("category_scores", {}))
     topic = random.choice(categories[category])
-
-    recent_formats = [p.get("format") for p in load_published()[-3:]]
-    formats = [f for f in bank["formats"] if f not in recent_formats] or bank["formats"]
-    fmt = _weighted_choice(formats, perf.get("format_scores", {}))
-
-    return {"category": category, "topic": topic, "format": fmt}
+    return {"category": category, "topic": topic, "format": fmt, "source": "bank"}
 
 
 def add_topics(category: str, new_titles: list[str]) -> int:
