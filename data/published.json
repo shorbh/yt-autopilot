@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "kind": "long",
+    "video_id": "_arItix7pNQ",
+    "title": "Why A Seven Percent Mortgage Costs Two Hundred Grand More",
+    "topic": "How a 7% mortgage rate changes your total lifetime interest compared to 5% on a $400,000 home loan",
+    "category": "big_life_money",
+    "format": "case study: two fictional people make opposite choices; follow their numbers over 10-30 years",
+    "duration": 381.566667,
+    "source": "trend",
+    "headline": "What 7% Rates Could Mean for Home Buyers",
+    "recorded_at": "2026-09-19T14:54:40.035826+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "lM23hv42OoA",
+    "title": "The 7% Mortgage Trap",
+    "topic": "How a 7% mortgage rate changes your total lifetime interest compared to 5% on a $400,000 home loan",
+    "category": "big_life_money",
+    "format": "case study: two fictional people make opposite choices; follow their numbers over 10-30 years",
+    "parent": "_arItix7pNQ",
+    "recorded_at": "2026-09-19T14:54:41.737848+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "PIs2aloEVh0",
+    "title": "Why Refinancing Isn't Free",
+    "topic": "How a 7% mortgage rate changes your total lifetime interest compared to 5% on a $400,000 home loan",
+    "category": "big_life_money",
+    "format": "case study: two fictional people make opposite choices; follow their numbers over 10-30 years",
+    "parent": "_arItix7pNQ",
+    "recorded_at": "2026-09-19T14:54:44.093737+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "SsUE_svp1k8",
+    "title": "The Lifetime Interest Math",
+    "topic": "How a 7% mortgage rate changes your total lifetime interest compared to 5% on a $400,000 home loan",
+    "category": "big_life_money",
+    "format": "case study: two fictional people make opposite choices; follow their numbers over 10-30 years",
+    "parent": "_arItix7pNQ",
+    "recorded_at": "2026-09-19T14:54:46.162564+00:00"
+  }
+]
