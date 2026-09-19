@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pipeline.config import BUILD, load_config
+from pipeline.describe import long_description, short_description
 from pipeline.render import build_long_video, build_shorts, contact_sheet, thumbnail
 from pipeline.script import generate_script, word_count
 from pipeline.state import record_published
@@ -60,13 +61,9 @@ def main() -> int:
     shorts = [] if args.no_shorts else build_shorts(cfg, script, workdir)
     print(f"[4/5] Shorts rendered: {len(shorts)} in {time.time()-t2:.0f}s")
 
-    # fill in timestamps
-    desc = script["description"]
-    stamps = "\n".join(long["timestamps"])
-    # drop the model's placeholder timestamps (inline or on their own lines); real chapters are appended below
-    desc = re.sub(r"\s*\[\d{1,2}:\d{2}\][^\[\n.]*\.?", "", desc)
-    desc = re.sub(r"[ \t]{2,}", " ", desc)
-    desc = desc.strip() + "\n\nChapters:\n" + stamps
+    # description: hook + subscribe link above the fold, context body, key facts, real chapters, watch-next, hashtags
+    desc = long_description(cfg, script, long["timestamps"], topic=pick["topic"])
+    (workdir / "description.txt").write_text(desc, encoding="utf-8")
 
     if args.dry_run:
         print(f"[5/5] DRY RUN — nothing uploaded. Inspect: {workdir}")
@@ -85,7 +82,7 @@ def main() -> int:
 
     for i, sh in enumerate(shorts):
         day = pub["shorts_offset_days"][i % len(pub["shorts_offset_days"])]
-        sdesc = f"{sh['title']}\n\nFull breakdown: https://youtu.be/{long_id}\n\n{cfg['channel']['disclaimer']}"
+        sdesc = short_description(cfg, script, sh["title"], long_id)
         sid = upload_video(cfg, Path(sh["path"]), sh["title"], sdesc, script["tags"][:10],
                            publish_at(cfg, day, pub["shorts_publish_hour"]), is_short=True)
         record_published({"kind": "short", "video_id": sid, "title": sh["title"], "topic": pick["topic"],

@@ -8,6 +8,7 @@
 
 channel:
   name: "Money Mechanics"           # change to your channel name
+  id: "UCTfIJ4MK2kj57qheFd0Y9vg"    # YouTube channel ID (Studio -> Settings -> Channel -> Advanced); used for the ?sub_confirmation=1 link
   tagline: "How money actually works, explained in plain English."
   niche: "personal finance and investing explainers for a global English-speaking audience"
   audience: "adults 22-45 who want to understand money without jargon"

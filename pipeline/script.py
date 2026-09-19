@@ -5,6 +5,8 @@ Design goals (these are what keep the channel on the right side of YouTube's
 video, rotating formats, a visible on-screen data chart, a consistent brand voice.
 """
 import json
+import re
+
 from .llm import ask_json
 
 SYSTEM = """You are the head writer for a faceless YouTube channel about personal finance.
@@ -42,12 +44,15 @@ SCHEMA = """{
     "icon": "one Lucide icon for the topic: home | car | piggy-bank | credit-card | briefcase | receipt | landmark | graduation-cap | heart-pulse | shopping-cart | chart-line | wallet",
     "query": "3-5 word stock-photo search for ONE PERSON with an expression matching the title's emotion, e.g. 'worried man glasses portrait' | 'shocked woman laptop' | 'serious businesswoman office'"
   },
-  "description": "150-250 words. First line is a hook. Include 3 timestamps placeholders like [00:00], a one-line disclaimer, and a call to subscribe. No links.",
+  "description_hook": "1-2 sentences, <= 150 characters TOTAL, starting with the primary keyword phrase, written as a curiosity hook that extends the title (never 'In this video we...'). Numerals and symbols ($400,000, 7%), never spelled-out numbers.",
+  "description_body": "2-3 short paragraphs, 120-200 words, plain prose: the problem, what the viewer will be able to do after watching, and the related terms a searcher would use (secondary keywords woven into sentences, NOT a list). Numerals only. No disclaimer, no subscribe line, no timestamps, no links, no hashtags.",
+  "key_facts": ["3-5 items of <= 8 words each with the video's concrete numbers, e.g. '$400,000 loan · 5% vs 7%', '+$200,000 lifetime interest'"],
+  "hashtags": ["3-5 specific CamelCase hashtags without generic ones like #viral, e.g. '#MortgageRates', '#Amortization', '#PersonalFinance'"],
   "tags": ["12-18 lowercase tags"],
   "sections": [
     {
       "id": "hook",
-      "heading": "3-6 word on-screen heading",
+      "heading": "3-6 word on-screen heading that also works as a chapter title in search: concrete and keyword-bearing ('The 7% Payment Shock', 'Amortization: Year 1 vs Year 10'), never generic ('Introduction', 'Step 1')",
       "narration": "60-90 words. State the surprising claim and the number that proves it.",
       "visual_query": "2-4 word stock-footage search (e.g. 'calculator desk')",
       "stat": {"label": "on-screen big number label", "value": "$180,000"} ,
@@ -117,10 +122,46 @@ _THUMB_ICONS = {"home", "car", "piggy-bank", "credit-card", "briefcase", "receip
                 "heart-pulse", "shopping-cart", "chart-line", "wallet"}
 
 
+# sentence-level: remove just the disclaimer sentence, not the paragraph it sits in
+_DISCLAIMER_RE = re.compile(r"[^.!?\n]*(?:financial advice|investment advi[cs]e|educational purposes only)[^.!?\n]*[.!?]?\s*", re.I)
+# timestamp lines like "[00:00] Hook" / "1:20 - Step 1"; clock times ("9:30 am") are left alone
+_TIMESTAMP_RE = re.compile(r"^[ \t]*\[?\d{1,2}:\d{2}(?::\d{2})?\]?(?![ \t]*(?:am|pm|a\.m\.|p\.m\.)\b).*$", re.I | re.M)
+
+
+def _clean_prose(text: str) -> str:
+    """Drop disclaimer sentences, timestamp lines, hashtags and URLs the model added despite instructions;
+    the description builder appends the canonical versions itself (so nothing appears twice)."""
+    text = _DISCLAIMER_RE.sub("", str(text or ""))
+    text = _TIMESTAMP_RE.sub("", text)
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"(?m)^\s*(#\w+\s*)+$", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def _validate(d: dict, cfg: dict) -> None:
-    for k in ("title", "description", "tags", "sections", "shorts"):
+    for k in ("title", "tags", "sections", "shorts"):
         if k not in d:
             raise ValueError(f"Script missing key: {k}")
+    # description parts (v3.2.1). Older single-field replies are split: first sentence -> hook, rest -> body.
+    hook = _clean_prose(d.get("description_hook") or "")
+    body = _clean_prose(d.get("description_body") or "")
+    if not hook and not body:
+        legacy = _clean_prose(d.get("description") or "") or d["title"]
+        parts = re.split(r"(?<=[.!?])\s+", legacy, 1)
+        hook = parts[0] if parts[0][-1:] in ".!?" else parts[0] + "."
+        body = parts[1] if len(parts) > 1 else ""
+    if len(hook) > 160:  # keep the search snippet intact
+        cut = hook[:157]
+        hook = cut[: cut.rfind(" ")].rstrip(",;:") + "…"
+    facts = [str(x).strip(" -•·") for x in (d.get("key_facts") or []) if str(x).strip()][:5]
+    tags_ = []
+    for h in (d.get("hashtags") or []):
+        h = "#" + re.sub(r"[^A-Za-z0-9]", "", str(h))
+        if len(h) > 2 and h.lower() not in ("#viral", "#shorts", "#fyp", "#trending", "#youtube") and h not in tags_:
+            tags_.append(h)
+    d["description_hook"], d["description_body"], d["key_facts"], d["hashtags"] = hook, body, facts, tags_[:5]
+    d["description"] = (hook + "\n\n" + body).strip()   # kept for anything that still reads the old field
     # thumbnail spec: normalise, and accept the pre-v3.2.1 flat keys (thumbnail_text / thumbnail_query) as a fallback
     th = d.get("thumbnail") if isinstance(d.get("thumbnail"), dict) else {}
     hero = str(th.get("hero") or d.get("thumbnail_text") or d["title"]).strip()[:12]
@@ -154,10 +195,6 @@ def _validate(d: dict, cfg: dict) -> None:
         s.setdefault("short_worthy", False)
         s.setdefault("visual_query", "finance")
     d.setdefault("chart", None)
-    # description must include disclaimer for policy + trust
-    disc = cfg["channel"]["disclaimer"]
-    if disc.lower() not in d["description"].lower():
-        d["description"] += f"\n\n{disc}"
 
 
 def word_count(script: dict) -> int:
