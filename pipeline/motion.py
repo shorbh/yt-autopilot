@@ -161,11 +161,38 @@ def _animate_number(value: str, t: float) -> str:
     return value[: m.start()] + s + value[m.end():]
 
 
+def _paste_rgba(img: Image.Image, layer: Image.Image, cx: float, cy: float, alpha: float = 1.0) -> None:
+    if alpha < 1.0:
+        a = layer.split()[3].point(lambda v: int(v * alpha))
+        layer = layer.copy()
+        layer.putalpha(a)
+    img.paste(layer, (int(cx - layer.width / 2), int(cy - layer.height / 2)), layer)
+
+
+PEEP_BASE = 1024   # rasterise characters once at this size; animated sizes are PIL resizes (ms, not cairo)
+ICON_BASE = 512
+
+
+def _paste_peep(img: Image.Image, ch: dict | None, size: int, cx: float, cy: float, alpha: float = 1.0) -> bool:
+    """Paste an Open Peeps character (dict: name, gender, mood) centred at (cx, cy)."""
+    if not isinstance(ch, dict) or not ch.get("name"):
+        return False
+    pp = assets_remote.peep(str(ch.get("name")), str(ch.get("gender") or "neutral"), str(ch.get("mood") or "neutral"), PEEP_BASE)
+    if pp is None:
+        return False
+    if size != PEEP_BASE:
+        pp = pp.resize((size, size), Image.LANCZOS)
+    _paste_rgba(img, pp, cx, cy, alpha)
+    return True
+
+
 def _paste_icon(img: Image.Image, name: str | None, size: int, color, cx: float, cy: float, alpha: float = 1.0) -> bool:
     """Paste a Lucide icon centred at (cx, cy). Returns False if the icon is unavailable."""
     if not name:
         return False
-    ic = assets_remote.icon(name, size, color)
+    ic = assets_remote.icon(name, ICON_BASE, color)
+    if ic is not None and size != ICON_BASE:
+        ic = ic.resize((size, size), Image.LANCZOS)
     if ic is None:
         return False
     if alpha < 1.0:
@@ -333,15 +360,17 @@ def compare(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
             d.rounded_rectangle([x0, y0, x1, y1], radius=28, fill=(20, 27, 55), outline=col, width=4)
             cx, bw, bh = (x0 + x1) / 2, x1 - x0, y1 - y0
             pad = bw * 0.06
-            has_icon = _paste_icon(img, side.get("icon"), int(bh * 0.16), col, cx, y0 + bh * 0.16, alpha=a)
-            label_y = y0 + bh * (0.30 if has_icon else 0.12)
+            # a character (Open Peep) beats an icon when the side represents a person
+            has_icon = _paste_peep(img, side.get("character"), int(bh * 0.30), cx, y0 + bh * 0.19, alpha=a) \
+                or _paste_icon(img, side.get("icon"), int(bh * 0.16), col, cx, y0 + bh * 0.16, alpha=a)
+            label_y = y0 + bh * (0.36 if has_icon else 0.12)
             draw_fit(cfg, d, str(side.get("label") or ""), (x0 + pad, label_y, x1 - pad, label_y + bh * 0.16), int(tsize * 0.8), col, align="center", max_lines=1)
             val = str(side.get("value") or "")
             vf = _fit_font(cfg, d, val, bw * 0.86, int(min(w, h) * (0.12 if not portrait else 0.09)))
-            d.text((cx, y0 + bh * 0.56), _animate_number(val, a), font=vf, fill=hex_to_rgb(st["text"]), anchor="mm")
+            d.text((cx, y0 + bh * (0.62 if has_icon else 0.56)), _animate_number(val, a), font=vf, fill=hex_to_rgb(st["text"]), anchor="mm")
             note = str(side.get("note") or "")
             if note:
-                draw_fit(cfg, d, note, (x0 + pad, y0 + bh * 0.72, x1 - pad, y1 - pad), int(tsize * 0.6), (190, 200, 225), align="center", max_lines=2)
+                draw_fit(cfg, d, note, (x0 + pad, y0 + bh * (0.78 if has_icon else 0.72), x1 - pad, y1 - pad), int(tsize * 0.6), (190, 200, 225), align="center", max_lines=2)
         frames.append(img)
     return _save_frames(frames, out_dir)
 
@@ -427,36 +456,50 @@ def photo_text(cfg, spec, w, h, out_dir, photo: Path | None, variant=0) -> tuple
     return _save_frames(frames, out_dir)
 
 
-def illustration_card(cfg, spec, w, h, out_dir, sketch: Path | None, variant=0) -> tuple[Path, int] | None:
-    """Sketch illustration (square) with an optional caption phrase. Landscape: sketch left, text right."""
-    if sketch is None or not Path(sketch).exists():
-        return None
+def character(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int] | None:
+    """A named hand-drawn character (Open Peeps) with a name tag and the sentence's key line, optionally
+    a big stat. Landscape: character left, text right. Returns None if the avatar cannot be fetched."""
     st = cfg["style"]
-    text = str(spec.get("caption") or spec.get("text") or "")
+    ch = spec.get("character") or {"name": spec.get("name"), "gender": spec.get("gender"), "mood": spec.get("mood")}
+    name = str(ch.get("name") or "").strip()
+    text = str(spec.get("text") or "")
+    stat = str(spec.get("stat") or "")
     portrait = h > w
-    sk = Image.open(sketch).convert("RGB")
-    side = int(min(w, h) * (0.72 if not portrait else 0.8))
-    sk = sk.resize((side, side))
-    # blend the sketch's own background into ours so edges disappear
+    size = int(min(w, h) * (0.62 if not portrait else 0.55))
+    if assets_remote.peep(name, str(ch.get("gender") or "neutral"), str(ch.get("mood") or "neutral"), PEEP_BASE) is None:
+        return None
     n = int(ANIM_FPS * 0.9)
     frames = []
     for i in range(n + 1):
         t = _ease(i / n)
         img = _base(cfg, w, h, variant=variant)
-        s = int(side * (0.92 + 0.08 * t))
-        sk_t = sk.resize((s, s))
-        if portrait:
-            cx, cy = w / 2, h * 0.42
-        else:
-            cx, cy = (w * 0.30 if text else w * 0.5), h * 0.5
-        faded = Image.blend(img.crop((int(cx - s / 2), int(cy - s / 2), int(cx - s / 2) + s, int(cy - s / 2) + s)), sk_t, t)
-        img.paste(faded, (int(cx - s / 2), int(cy - s / 2)))
         d = ImageDraw.Draw(img)
-        if text:
-            if portrait:
-                draw_fit(cfg, d, text, (w * 0.1, h * 0.72, w * 0.9, h * 0.9), int(w * 0.065), _mix(hex_to_rgb(st["text"]), t), align="center", max_lines=3)
-            else:
-                draw_fit(cfg, d, text, (w * 0.6, h * 0.3, w * 0.94, h * 0.7), int(h * 0.07), _mix(hex_to_rgb(st["text"]), t), valign="middle", max_lines=4)
+        if portrait:
+            cx, cy = w / 2, h * 0.36
+            _paste_peep(img, ch, int(size * (0.9 + 0.1 * t)), cx, cy - (1 - t) * h * 0.03, alpha=t)
+            tag_y = cy + size * 0.5
+            box = (w * 0.08, tag_y + h * 0.06, w * 0.92, h * 0.86)
+        else:
+            cx, cy = w * 0.27, h * 0.5
+            _paste_peep(img, ch, int(size * (0.9 + 0.1 * t)), cx - (1 - t) * w * 0.03, cy, alpha=t)
+            tag_y = cy + size * 0.5
+            box = (w * 0.5, h * 0.22, w * 0.94, h * 0.78)
+        # name tag under the character
+        if name:
+            f = font(cfg, int(min(w, h) * 0.04))
+            tw = d.textlength(name, font=f)
+            pad = int(min(w, h) * 0.015)
+            d.rounded_rectangle([cx - tw / 2 - pad * 2, tag_y - pad, cx + tw / 2 + pad * 2, tag_y + f.size + pad],
+                                radius=(f.size + 2 * pad) // 2, fill=_mix(hex_to_rgb(st["accent"]), t))
+            d.text((cx, tag_y + f.size / 2), name, font=f, fill=hex_to_rgb(st["bg_dark"]), anchor="mm")
+        col = _mix(hex_to_rgb(st["text"]), t)
+        if stat:
+            sf = _fit_font(cfg, d, stat, (box[2] - box[0]), int(min(w, h) * (0.16 if not portrait else 0.12)))
+            sx = (box[0] + box[2]) / 2 if portrait else box[0]
+            d.text((sx, box[1] + sf.size * 0.5), _animate_number(stat, t), font=sf, fill=_mix(hex_to_rgb(st["accent2"]), t), anchor="mm" if portrait else "lm")
+            box = (box[0], box[1] + sf.size * 1.3, box[2], box[3])
+        draw_fit(cfg, d, text, box, int(min(w, h) * (0.075 if not portrait else 0.065)), col,
+                 align="center" if portrait else "left", valign="top" if stat else "middle", max_lines=4)
         frames.append(img)
     return _save_frames(frames, out_dir)
 
@@ -531,6 +574,7 @@ RENDERERS = {
     "bignumber": bignumber,
     "callout": callout,
     "icon_text": icon_text,
+    "character": character,
     "formula": formula,
     "list": list_card,
     "compare": compare,

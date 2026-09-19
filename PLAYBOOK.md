@@ -87,8 +87,8 @@ GitHub Actions (cron)
       3. pipeline/tts.py       edge-tts per section → mp3 + word timings; concat + loudnorm
          pipeline/storyboard.py LLM splits each section into beats (1-2 sentences) + a visual spec
          pipeline/motion.py    animated PIL cards: bignumber | compare | list | formula | callout | icon_text |
-                               photo_text | illustration | timeline | chart | chapter | outro  (text always fitted)
-         pipeline/assets_remote.py  Lucide icons (jsDelivr + cairosvg), Pollinations sketch illustrations
+                               photo_text | character | timeline | chart | chapter | outro  (text always fitted)
+         pipeline/assets_remote.py  Lucide icons (jsDelivr + cairosvg), Open Peeps characters (DiceBear API)
          pipeline/visuals.py   static helpers, chart drawing, Pexels b-roll/photos, lower-third / Shorts title
          pipeline/render.py    beat timing from word boundaries → one clip per beat (fade) → concat
                                → voice (+ music bed) → karaoke ASS captions → long.mp4
@@ -259,6 +259,17 @@ Estimated 40 minutes; steps marked 🧑 must be done by the account owner.
 
 ---
 
+## 9b. What external research we adopted (and what we didn't)
+
+Source: user's Gemini "Advanced Video Engineering" report (Sep 2026). Adopted: hook in first 3–7 s with a
+visual pattern-interrupt (hook rule), no intro/logo, frequent cuts (≈6 s target for explainers; 2–3 s is for
+talking-head), micro-hooks via chapter cards, karaoke captions for muted mobile viewing, don't summarise-and-fade
+at the end (end screen stays visual + CTA), emotional face on thumbnails, QCR (thumbnail promise = content),
+Test & Compare thumbnails once monetised, inauthentic-content & synthetic-media disclosure compliance.
+Not adopted: Kokoro TTS / Whisper / ComfyUI / local LLaMA — they presume a local GPU box; our runner is a free
+4-vCPU cloud VM, edge-tts already yields word timestamps, and unverified image generators produced poor output.
+Several statistics in the report are unsourced; treat them as directional.
+
 ## 10. Open items / next steps
 
 - [ ] **Review the dry-run output** (artifact of run #3): voice, caption size, chart/stat-card look, thumbnail text.
@@ -285,6 +296,10 @@ Estimated 40 minutes; steps marked 🧑 must be done by the account owner.
 | 2026-09-17 | `render.py` caption fallback + stats; `tts.py` explicit WordBoundary; `produce.yml` unbuffered logs + always-upload artifact | Run #2 caption burn-in failure |
 | 2026-09-18 | Dry-run #3 succeeded end-to-end (14m 51s) | First verified full render |
 | 2026-09-18 | Added this PLAYBOOK.md | Documentation for maintenance and cloning |
+| 2026-09-19 | Perf: characters/icons rasterised once at a base size (1024 / 512 px) and resized with PIL per animation frame instead of re-running cairo for every size; warm-up now pre-rasterises at those exact sizes. | Animated size changes were triggering ~14 cairo renders per character beat. |
+| 2026-09-19 | **Research gaps closed.** Script prompt: hook speaks the title keywords in the first two sentences; every section ends with a one-sentence forward tease (micro-hook); close = action rule → next-topic tease → sign-off, never "in summary". Thumbnails: A (primary) + B (different expression) + C (alt title, no character) saved to the artifact for Studio's *Test & Compare* (API cannot set variants). Music: real sidechain ducking (music dips under speech). **Retention diagnostics**: weekly review pulls the `audienceWatchRatio` curve per recent video (nose 5% / mid 50% / tail 90%), prints a table, and converts weak spots into `script_hints` in `performance.json`, which `generate_script` injects into the next script prompt — the channel now corrects its own hooks and endings from data. | Point-by-point audit of the external research (§9b). |
+| 2026-09-19 | **v3.1 — characters instead of AI sketches.** Review of run #5: Pollinations sketches were off-topic, washed out and watermarked; "Sarah" drawn as a man; still ~50% text cards. Removed Pollinations entirely. Added `assets_remote.peep()` — DiceBear **Open Peeps** (Pablo Stanley, CC0, free HTTP API, SVG → cairosvg): hand-drawn half-body people, hairstyle/facial-hair chosen from the script's stated gender, expression from a mood word, same name → same person. New `character` card (avatar + name tag + line + optional stat); `compare` sides accept `character`. Storyboard: `character` type replaces `illustration`; hard cap of 25% plain callouts; first hook beat forced visual (bignumber if a number is spoken, else photo). Thumbnail gets a Peep with a shocked/worried face (the "emotional face" CTR lever from the research). Asset caches warmed concurrently before rendering. | User feedback + external research (retention nose/body/tail, QCR, emotional thumbnails). |
+| 2026-09-19 | Dry-run #5 (v3): **6m 45s total**; long 6.5 min in 281 s with 64 beats (5.8 s/visual), icons + 4 sketches fetched without warnings. Mix was 50% callouts → added `storyboard._diversify`: no two consecutive callouts; later ones become keyword-matched `icon_text` / `photo_text` cards. | Text-only runs still too long; diversify automatically. |
 | 2026-09-19 | v3 performance hardening: illustration beats dispatched last so no render worker idles on a remote fetch; Pollinations circuit breaker (60 s timeout, layer disabled after 2 consecutive failures — worst case ~2 min instead of ~18). | Asked to confirm performance was preserved; two gaps found and closed. |
 | 2026-09-19 | **v3 visuals — imagery layers.** Review of run #4 output: timeline text clipped at canvas edges (1:18), and video was text-only. Added `pipeline/assets_remote.py` (Lucide icons via jsDelivr + cairosvg; Pollinations.ai sketch illustrations, keyless, rate-limited, fetched in a background thread); `motion.py` rewritten with `fit_text_box`/`draw_fit` (wrap → shrink → ellipsis, nothing clips), 3 rotating background variants, icons in list/compare/bignumber, new cards `icon_text`, `photo_text` (Pexels photo + text), `illustration` (sketch + caption), `outro_card` (6 s end screen, audio padded); Shorts get a pinned top title and an animated progress bar (overlay-based — `drawbox` cannot animate). Storyboard prompt now demands layer variety and provides the allowed icon list. Workflow installs `libcairo2`; `cairosvg` in requirements (import guarded — icons simply skip if missing). | Text cards inform but don't *feel*; a mixed-layer edit (icons, photos, sketches, footage) is what retains viewers. |
 | 2026-09-18 | Dry-run #4 (beat engine + parallel): **6m 02s total** (was 14m 51s) — long video 6.4 min in 237 s, 3 Shorts in 60 s. Found: b-roll cache `key`→`slug` NameError (all b-roll beats fell back to slides) — fixed; storyboard under-split (31 beats, 12 s avg) — added pacing guard in `storyboard._normalise` (multi-sentence beats > 22 words split per sentence, extras become key-phrase callouts) and tightened the prompt to one sentence per beat. | Measured results of the performance work; pacing target is 4–8 s per visual. |

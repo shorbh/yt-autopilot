@@ -191,9 +191,6 @@ class _BrollCache:
             return p
 
 
-MAX_ILLUSTRATIONS = 6  # per video; Pollinations anonymous rate is ~1 image / 15 s
-
-
 def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdir: Path,
                overlay: Path | None, chart: dict | None, broll: _BrollCache, heading: str) -> Path:
     out = workdir / f"beat_{idx:03d}.mp4"
@@ -229,20 +226,12 @@ def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdi
                 _clip_from_frames(r[0], r[1], beat["dur"], w, h, fps, overlay, out)
                 return out
             vtype, vis = "callout", _callout(vis.get("text"))
-        if vtype == "illustration":
-            fut = beat.get("_illus")
-            sketch = None
-            if fut is not None:
-                try:
-                    # worst case the 6th sketch starts ~5 x (16 s interval + generation) after launch
-                    sketch = fut.result(timeout=360)
-                except Exception as e:  # noqa: BLE001
-                    print(f"[warn] illustration for beat {idx} unavailable: {str(e)[:120]}")
-            r = motion.illustration_card(cfg, vis, w, h, fdir, sketch, variant=idx)
+        if vtype == "character":
+            r = motion.character(cfg, vis, w, h, fdir, variant=idx)
             if r:
                 _clip_from_frames(r[0], r[1], beat["dur"], w, h, fps, overlay, out)
                 return out
-            vtype, vis = "callout", _callout(vis.get("caption") or None)
+            vtype, vis = "callout", _callout(vis.get("text") or None)
         if vtype in motion.RENDERERS:
             fd, n = motion.RENDERERS[vtype](cfg, vis, w, h, fdir, variant=idx)
             _clip_from_frames(fd, n, beat["dur"], w, h, fps, overlay, out)
@@ -377,38 +366,37 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
             return c
         jobs.append(_outro)
 
-    # Illustrations are slow (rate-limited remote service): fetch them sequentially in ONE background
-    # thread while the beat clips render; each illustration beat waits on its own future.
-    illus_beats = [b for b in all_beats if b["visual"].get("type") == "illustration"]
-    for b in illus_beats[MAX_ILLUSTRATIONS:]:
-        b["visual"] = {"type": "callout", "text": (b["visual"].get("caption") or b["text"])[:90]}
-    illus_pool = ThreadPoolExecutor(max_workers=1)
-    for k, b in enumerate(illus_beats[:MAX_ILLUSTRATIONS]):
-        prompt = b["visual"].get("scene") or b["text"]
-        b["_illus"] = illus_pool.submit(assets_remote.illustration, prompt, workdir / f"illus_{k:02d}.png", 1024, 1024)
-
     types = [b["visual"].get("type") for b in all_beats]
     mix = ", ".join(f"{types.count(x)} {x}" for x in sorted(set(types), key=types.index))
     print(f"      storyboard: {len(all_beats)} beats across {len(sections)} sections "
           f"(avg {sum(s['duration'] for s in sections) / max(1, len(all_beats)):.1f}s per visual): {mix}; "
           f"rendering with {WORKERS} workers")
 
-    # 2) ... then render them in parallel (PIL and ffmpeg both release the GIL). Illustration beats
-    #    wait on a slow remote fetch, so they are dispatched LAST — no worker idles while the fast
-    #    cards render — and results are stitched back into playback order.
-    def _is_slow(job) -> bool:
-        b = getattr(job, "__defaults__", None)
-        return bool(b) and isinstance(b[0], dict) and b[0].get("visual", {}).get("type") == "illustration"
+    # Warm the remote-asset caches once, concurrently, so beat workers never wait on the network
+    # for the same icon/character twice.
+    warm = set()
+    for b in all_beats:
+        v = b["visual"]
+        sides = [v.get(s) for s in ("left", "right") if isinstance(v.get(s), dict)]
+        for ic in [v.get("icon")] + list(v.get("icons") or []) + [sd.get("icon") for sd in sides]:
+            if isinstance(ic, str) and ic:
+                warm.add(("icon", ic))
+        for ch in [v.get("character")] + [sd.get("character") for sd in sides]:
+            if isinstance(ch, dict) and ch.get("name"):
+                warm.add(("peep", str(ch.get("name")), str(ch.get("gender") or "neutral"), str(ch.get("mood") or "neutral")))
+    # Warm at the exact base sizes the renderers use, so the first beat that needs an asset hits the
+    # rasterised cache too (not only the SVG cache).
+    accent = hex_to_rgb(cfg["style"]["accent"])
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for item in warm:
+            if item[0] == "icon":
+                pool.submit(assets_remote.icon, item[1], motion.ICON_BASE, accent)
+            else:
+                pool.submit(assets_remote.peep, item[1], item[2], item[3], motion.PEEP_BASE)
 
-    order = [i for i, j in enumerate(jobs) if not _is_slow(j)] + [i for i, j in enumerate(jobs) if _is_slow(j)]
-    try:
-        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-            futures = {i: pool.submit(jobs[i]) for i in order}
-            clips: list[Path] = [futures[i].result() for i in range(len(jobs))]
-    finally:
-        # cancel sketches nobody is waiting for any more (timed-out beats already fell back);
-        # otherwise the interpreter would block at exit until the queue drained
-        illus_pool.shutdown(wait=False, cancel_futures=True)
+    # 2) ... then render them in parallel (PIL and ffmpeg both release the GIL), keeping order.
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        clips: list[Path] = list(pool.map(lambda job: job(), jobs))
 
     lst = workdir / "concat.txt"
     lst.write_text("".join(f"file '{c.name}'\n" for c in clips), encoding="utf-8")
@@ -423,7 +411,12 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
     afilter: list[str] = []
     if music:
         base += ["-stream_loop", "-1", "-i", str(music)]
-        afilter = ["-filter_complex", "[2:a]volume=0.10[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=0[a]", "-map", "0:v", "-map", "[a]"]
+        # music bed with real sidechain ducking: the voice compresses the music while speaking, music
+        # breathes back up in pauses (-20 dB base level; ducks a further ~12 dB under speech)
+        afilter = ["-filter_complex",
+                   "[1:a]asplit=2[v][sc];[2:a]volume=0.12[m];[m][sc]sidechaincompress=threshold=0.02:ratio=8:attack=40:release=500[md];"
+                   "[v][md]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]",
+                   "-map", "0:v", "-map", "[a]"]
     tail = ["-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out_mp4)]
 
     # Shorts: thin progress bar along the bottom (standard retention device on vertical video).
@@ -498,6 +491,20 @@ def build_shorts(cfg: dict, script: dict, workdir: Path) -> list[dict]:
 
 
 def thumbnail(cfg: dict, script: dict, workdir: Path) -> Path:
+    """Primary thumbnail (A) + two variants (B: different expression, C: alt title text, no character)
+    for YouTube Studio's Test & Compare, which the API cannot drive. Returns the path of A."""
+    a = _thumbnail(cfg, script, workdir, workdir / "thumbnail.jpg", mood=None, text=None, character=True)
+    try:
+        alt_mood = "worried" if str(script.get("thumbnail_mood") or "shocked") != "worried" else "excited"
+        _thumbnail(cfg, script, workdir, workdir / "thumbnail_B.jpg", mood=alt_mood, text=None, character=True)
+        alt_text = (script.get("alt_titles") or [None])[0]
+        _thumbnail(cfg, script, workdir, workdir / "thumbnail_C.jpg", mood=None, text=alt_text, character=False)
+    except Exception as e:  # noqa: BLE001 - variants are a bonus, never fatal
+        print(f"[warn] thumbnail variants failed: {str(e)[:120]}")
+    return a
+
+
+def _thumbnail(cfg: dict, script: dict, workdir: Path, out: Path, mood: str | None, text: str | None, character: bool) -> Path:
     """Split layout: bold text panel on the left, dimmed photo fading in on the right."""
     from PIL import Image, ImageDraw, ImageEnhance
 
@@ -505,7 +512,9 @@ def thumbnail(cfg: dict, script: dict, workdir: Path) -> Path:
     st = cfg["style"]
     bg = visuals.gradient(W, H, st["bg_dark"], st["bg_dark2"])
     q = script.get("thumbnail_query") or script["sections"][0].get("visual_query", "finance")
-    photo_path = visuals.pexels_photo(q, workdir / "thumb_bg.jpg")
+    photo_path = workdir / "thumb_bg.jpg"
+    if not photo_path.exists():
+        photo_path = visuals.pexels_photo(q, photo_path)
     if photo_path:
         ph = Image.open(photo_path).convert("RGB")
         ph = ph.resize((max(W, int(ph.width * H / ph.height)), H))
@@ -515,8 +524,21 @@ def thumbnail(cfg: dict, script: dict, workdir: Path) -> Path:
         mask = Image.linear_gradient("L").rotate(90, expand=True).resize((W, H))  # dark->light left->right
         mask = mask.point(lambda v: max(0, min(255, int((v - 90) * 2.2))))
         bg = Image.composite(ph, bg, mask)
+    # Emotional face (the strongest CTR lever): a hand-drawn character with a surprised/worried expression
+    # on the right third, in front of the faded photo.
+    has_char = False
+    if character and cfg["video"].get("thumbnail_character", True):
+        mood = str(mood or script.get("thumbnail_mood") or "shocked")
+        who = script.get("thumbnail_character")
+        if not isinstance(who, dict):
+            who = {"name": script.get("title", "viewer"), "gender": "neutral"}
+        pp = assets_remote.peep(str(who.get("name") or "viewer"), str(who.get("gender") or "neutral"), mood, motion.PEEP_BASE)
+        if pp is not None:
+            pp = pp.resize((620, 620), Image.LANCZOS)
+            bg.paste(pp, (W - 560, H - 560), pp)  # overflows right/bottom edges; PIL clips (Peeps are half-body)
+            has_char = True
     d = ImageDraw.Draw(bg)
-    text = script.get("thumbnail_text", script["title"])[:30].upper()
+    text = str(text or script.get("thumbnail_text") or script["title"])[:30].upper()
     words = text.split()
     line1, line2 = (" ".join(words[: max(1, len(words) // 2)]), " ".join(words[max(1, len(words) // 2):])) if len(words) > 2 else (text, "")
     size = 150
@@ -529,8 +551,9 @@ def thumbnail(cfg: dict, script: dict, workdir: Path) -> Path:
     if line2:
         d.text((x, y + size * 1.15), line2, font=f, fill=(255, 255, 255), stroke_width=8, stroke_fill=(0, 0, 0))
     d.rectangle([0, H - 22, W, H], fill=hex_to_rgb(st["accent"]))
-    d.text((W - 28, H - 46), cfg["channel"]["name"].upper(), font=visuals.font(cfg, 28), fill=(255, 255, 255), anchor="rm",
+    # channel tag: bottom-right normally; bottom-left when the character occupies the right third
+    tag_xy, tag_anchor = ((28, H - 46), "lm") if has_char else ((W - 28, H - 46), "rm")
+    d.text(tag_xy, cfg["channel"]["name"].upper(), font=visuals.font(cfg, 28), fill=(255, 255, 255), anchor=tag_anchor,
            stroke_width=3, stroke_fill=(0, 0, 0))
-    out = workdir / "thumbnail.jpg"
     bg.save(out, "JPEG", quality=88, optimize=True)
     return out

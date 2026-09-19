@@ -16,7 +16,8 @@ import re
 from .llm import ask_json
 
 VISUAL_TYPES = ("bignumber", "compare", "list", "formula", "callout", "chart", "timeline", "broll",
-                "icon_text", "photo_text", "illustration")
+                "icon_text", "photo_text", "character")
+MAX_CALLOUT_SHARE = 0.25   # plain text cards may be at most a quarter of all beats
 
 # Lucide icon names the storyboard may use (all verified to exist in lucide-static).
 ICONS = (
@@ -57,12 +58,17 @@ each sentence is spoken. Rules:
 - Vary the LAYERS so the video is never text-only. Mix these across each section:
     icon_text    = a concept statement (<= 10 words) + one icon from the allowed list, e.g. "A grant is a promise" + "handshake".
     photo_text   = scene-setting or emotional sentence: short phrase + a 2-4 word stock-photo query (objects/places, no faces).
-    illustration = a person/story/metaphor sentence ("Imagine two investors...", "a leaking bucket"): give a concrete
-                   5-12 word drawing description of the scene ("two people at a table, one bucket leaking coins") + a
-                   3-8 word caption. Use 3-6 per video, never twice in a row.
-    callout      = a rule or punchline, <= 12 words, when no image fits.
+    character    = any sentence about a named or implied PERSON ("Sarah, 30, earns...", "imagine an investor who..."):
+                   give character {name, gender, mood}. Gender MUST follow the script's name/pronouns (Sarah/she -> female,
+                   Mike/he -> male; unknown -> neutral). mood in: neutral, happy, excited, worried, sad, stressed, shocked,
+                   scared, thinking, serious, proud, confused. Add "text" (<= 12 words) and optional "stat" ("$39,000").
+                   The same name must keep the same gender across the whole video.
+    compare      = two people or two options; when the sides are people add "character" to each side instead of "icon".
+    callout      = a rule or punchline, <= 12 words. Use SPARINGLY: at most 1 in 4 beats.
     broll        = ONLY for transitions with no data (max 15% of beats).
   Never put two visuals of the same type back to back; alternate text-heavy cards with image cards.
+- The FIRST beat of the 'hook' section must be a visual card (bignumber if the sentence has a number, otherwise
+  photo_text or character) — never a callout. The first 3 seconds decide whether the viewer stays.
 - Add an "icon" (from the allowed list) to bignumber, compare sides, and list items ("icons": [...]) whenever one fits.
 - All on-screen text must be short, concrete and copied/derived from the sentences (no new facts).
 - On screen, ALWAYS write numbers as numerals with symbols ("$50,000", "40%", "10,000 shares"), even when
@@ -75,8 +81,8 @@ SCHEMA = """{
       "id": "<section id as given>",
       "beats": [
         {"from": 1, "to": 1, "visual": {"type": "bignumber", "value": "$452,000", "label": "after 30 years at 7%", "icon": "piggy-bank"}},
-        {"from": 2, "to": 2, "visual": {"type": "illustration", "scene": "two people at a table, one holding a bucket leaking coins", "caption": "Same money, two outcomes"}},
-        {"from": 3, "to": 3, "visual": {"type": "compare", "title": "Same $500/month", "left": {"label": "0.1% fee", "value": "$452,000", "note": "index fund", "icon": "trending-up"}, "right": {"label": "1.1% fee", "value": "$352,000", "note": "active fund", "icon": "trending-down"}}},
+        {"from": 2, "to": 2, "visual": {"type": "character", "character": {"name": "Sarah", "gender": "female", "mood": "worried"}, "text": "Saves $500 a month, pays 1.1% in fees", "stat": "$352,000"}},
+        {"from": 3, "to": 3, "visual": {"type": "compare", "title": "Same $500/month", "left": {"label": "Sarah", "value": "$352,000", "note": "1.1% fee", "character": {"name": "Sarah", "gender": "female", "mood": "worried"}}, "right": {"label": "Mike", "value": "$452,000", "note": "0.1% fee", "character": {"name": "Mike", "gender": "male", "mood": "happy"}}}},
         {"from": 4, "to": 4, "visual": {"type": "icon_text", "text": "A grant is a promise, not a paycheck", "icon": "handshake"}},
         {"from": 5, "to": 6, "visual": {"type": "list", "title": "Three things that vest", "items": ["25% after year one", "Monthly after that", "Nothing if you leave early"], "icons": ["calendar", "repeat", "door-open"]}},
         {"from": 7, "to": 7, "visual": {"type": "formula", "lines": ["$500 × 12 × 30 = $180,000 invested", "at 7% → $452,000"]}},
@@ -108,6 +114,73 @@ def _key_phrase(sentence: str, max_words: int = 12) -> str:
 
 def _default_visual(sentence: str) -> dict:
     return {"type": "callout", "text": _key_phrase(sentence)}
+
+
+# keyword -> (icon, stock-photo query). Used to turn runs of plain text callouts into image cards.
+_KEYWORDS = [
+    (("retire", "retirement", "pension", "fire "), ("hourglass", "sunset beach chairs")),
+    (("tax", "taxes", "irs"), ("receipt", "tax documents desk")),
+    (("invest", "index fund", "stock", "market", "portfolio", "etf"), ("chart-line", "stock market screen")),
+    (("save", "saving", "savings", "emergency fund"), ("piggy-bank", "glass jar coins")),
+    (("debt", "loan", "credit card", "interest", "mortgage", "borrow"), ("credit-card", "credit card bills")),
+    (("salary", "income", "paycheck", "raise", "job", "career", "employer"), ("briefcase", "office desk laptop")),
+    (("house", "home", "rent", "landlord", "apartment"), ("home", "house keys door")),
+    (("car", "lease", "vehicle"), ("car", "car dealership")),
+    (("bank", "banks", "deposit", "account"), ("landmark", "bank building facade")),
+    (("inflation", "price", "prices", "cost", "expensive"), ("trending-up", "grocery receipt")),
+    (("time", "years", "decade", "month", "monthly"), ("calendar-days", "wall calendar")),
+    (("risk", "lose", "loss", "crash", "recession"), ("alert-triangle", "storm clouds city")),
+    (("compound", "growth", "grow", "double", "return"), ("sprout", "plant growing coins")),
+    (("family", "kids", "children", "spouse", "partner"), ("users", "family walking park")),
+    (("budget", "spend", "spending", "shopping", "groceries"), ("shopping-cart", "shopping cart aisle")),
+    (("rule", "lesson", "mistake", "trap", "myth"), ("lightbulb", "notebook pen desk")),
+    (("percent", "%", "fee", "fees", "rate"), ("percent", "calculator paperwork")),
+]
+
+
+def _keyword_visual(sentence: str, k: int) -> dict:
+    """Pick an icon_text (even k) or photo_text (odd k) card whose icon/photo matches the sentence."""
+    low = " " + sentence.lower() + " "
+    icon, query = "lightbulb", "finance desk notebook"
+    for keys, (ic, q) in _KEYWORDS:
+        if any(kw in low for kw in keys):
+            icon, query = ic, q
+            break
+    phrase = _key_phrase(sentence)
+    if k % 2 == 0:
+        return {"type": "icon_text", "text": phrase, "icon": icon}
+    return {"type": "photo_text", "text": phrase, "query": query}
+
+
+_NUM_IN_TEXT = re.compile(r"(\$\s?[\d,]+(?:\.\d+)?\s*(?:k|K|m|M|million|billion|thousand)?|[\d,]+(?:\.\d+)?\s*(?:%|percent|years?|months?|dollars?))")
+
+
+def _diversify(beats: list[dict], first_is_hook: bool = False) -> list[dict]:
+    """Pacing/variety guard applied after the LLM:
+    1. no two consecutive plain callouts;
+    2. plain callouts capped at MAX_CALLOUT_SHARE of all beats (excess become keyword image cards);
+    3. the very first beat of the hook is a visual, never a callout."""
+    prev_callout, k = False, 0
+    for b in beats:
+        if b["visual"].get("type") == "callout":
+            if prev_callout:
+                b["visual"] = _keyword_visual(b["text"], k)
+                k += 1
+            prev_callout = b["visual"].get("type") == "callout"
+        else:
+            prev_callout = False
+    allowed = max(1, int(len(beats) * MAX_CALLOUT_SHARE))
+    callouts = [b for b in beats if b["visual"].get("type") == "callout"]
+    for b in callouts[allowed:]:  # keep the earliest ones (punchlines tend to be planned), convert the rest
+        b["visual"] = _keyword_visual(b["text"], k)
+        k += 1
+    if first_is_hook and beats and beats[0]["visual"].get("type") in ("callout", "broll"):
+        m = _NUM_IN_TEXT.search(beats[0]["text"])
+        if m:
+            beats[0]["visual"] = {"type": "bignumber", "value": m.group(1).strip(), "label": _key_phrase(beats[0]["text"], 8)}
+        else:
+            beats[0]["visual"] = _keyword_visual(beats[0]["text"], 1)  # photo card
+    return beats
 
 
 def _clean_visual(v: dict, sentences: list[str]) -> dict:
@@ -144,16 +217,26 @@ def _clean_visual(v: dict, sentences: list[str]) -> dict:
     if t == "photo_text":
         v["text"] = str(v.get("text") or _key_phrase(sentences[0]))[:70]
         v["query"] = str(v.get("query") or "finance desk")[:40]
-    if t == "illustration":
-        v["scene"] = str(v.get("scene") or v.get("prompt") or _key_phrase(sentences[0]))[:160]
-        v["caption"] = str(v.get("caption") or "")[:60]
+    if t == "character":
+        ch = v.get("character") if isinstance(v.get("character"), dict) else {"name": v.get("name"), "gender": v.get("gender"), "mood": v.get("mood")}
+        if not ch.get("name"):
+            return _default_visual(sentences[0])
+        v["character"] = {"name": str(ch.get("name"))[:24], "gender": str(ch.get("gender") or "neutral"), "mood": str(ch.get("mood") or "neutral")}
+        v["text"] = str(v.get("text") or _key_phrase(sentences[0]))[:80]
+        v["stat"] = str(v.get("stat") or "")[:20]
     # icon hygiene on the other types
     if v.get("icon") is not None and v.get("icon") not in ICONS:
         v["icon"] = None
     if t == "compare":
         for side in ("left", "right"):
-            if isinstance(v.get(side), dict) and v[side].get("icon") not in ICONS:
-                v[side]["icon"] = None
+            sd = v[side]
+            if sd.get("icon") not in ICONS:
+                sd["icon"] = None
+            ch = sd.get("character")
+            if isinstance(ch, dict) and ch.get("name"):
+                sd["character"] = {"name": str(ch.get("name"))[:24], "gender": str(ch.get("gender") or "neutral"), "mood": str(ch.get("mood") or "neutral")}
+            else:
+                sd.pop("character", None)
     if t == "list" and v.get("icons"):
         v["icons"] = [i if i in ICONS else None for i in v["icons"]][:5]
     return v
@@ -192,7 +275,7 @@ def _normalise(section_id: str, sentences: list[str], raw_beats: list) -> list[d
             paced.append(b)
     for b in paced:
         b["text"] = " ".join(sentences[b["from"] - 1:b["to"]])
-    return paced
+    return _diversify(paced, first_is_hook=(section_id == "hook"))
 
 
 def storyboard(cfg: dict, sections: list[dict], chart: dict | None) -> dict[str, list[dict]]:

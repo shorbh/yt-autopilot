@@ -31,7 +31,7 @@ video:
   b_roll: "auto"             # auto = Pexels if PEXELS_API_KEY set, else generated slides
   music: false               # keep false unless you add royalty-free tracks to assets/music/
   outro: true                # 6 s end screen (subscribe CTA) after the close section
-  # Sketch illustrations come from Pollinations.ai (free, keyless). Set env ILLUSTRATIONS=0 to disable.
+  thumbnail_character: true  # hand-drawn character with an emotional face on the thumbnail (Open Peeps, CC0)
 
 shorts:
   count: 3

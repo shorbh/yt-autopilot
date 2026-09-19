@@ -14,6 +14,15 @@ a person says them where ambiguity exists (say 'seven percent', but keep '$1,200
 Never give personalised advice; explain mechanisms and math. Be concrete: every video contains
 at least one fully worked numeric example the viewer can reproduce. Avoid clichés like
 'in today's video' or 'without further ado'. Open on the payoff, not a greeting.
+
+Retention rules (these decide whether the algorithm recommends the video):
+- HOOK: the first sentence states the surprising number or claim; the title's main keywords are SPOKEN
+  within the first two sentences (YouTube indexes the transcript).
+- MICRO-HOOKS: every section except 'close' ends with a one-sentence forward tease that opens a
+  curiosity gap ("and the second mistake costs even more", "the twist is in year three"). Never a summary.
+- TAIL: the 'close' section never says "in summary", "to recap", "that's all" or fades out. It delivers the
+  action rule, then ONE sentence teasing a related topic the viewer should watch next, then the sign-off.
+- Any named person keeps the same name, gender and pronouns throughout; state gender implicitly via pronouns.
 Return ONLY valid JSON matching the schema requested."""
 
 SCHEMA = """{
@@ -21,6 +30,8 @@ SCHEMA = """{
   "alt_titles": ["2 alternative titles"],
   "thumbnail_text": "2-4 words, all caps, punchy, with a number or contrast (e.g. '1% = $180,000')",
   "thumbnail_query": "2-4 word stock photo search, object/scene not a face (e.g. 'stack of coins desk')",
+  "thumbnail_mood": "expression for the cartoon character on the thumbnail: shocked | worried | excited | thinking",
+  "thumbnail_character": {"name": "the video's main character or 'viewer'", "gender": "female | male | neutral"},
   "description": "150-250 words. First line is a hook. Include 3 timestamps placeholders like [00:00], a one-line disclaimer, and a call to subscribe. No links.",
   "tags": ["12-18 lowercase tags"],
   "sections": [
@@ -37,7 +48,7 @@ SCHEMA = """{
     {"id": "s3", "...": "..."},
     {"id": "s4", "...": "..."},
     {"id": "s5", "...": "..."},
-    {"id": "close", "heading": "...", "narration": "60-90 words: one-sentence recap, the action rule, then EXACTLY this sign-off text: {signoff}", "visual_query": "...", "stat": null, "short_worthy": false}
+    {"id": "close", "heading": "...", "narration": "50-80 words: the action rule (no recap), one sentence teasing the next topic to watch, then EXACTLY this sign-off text: {signoff}", "visual_query": "...", "stat": null, "short_worthy": false}
   ],
   "chart": {
     "type": "line | bar",
@@ -56,9 +67,12 @@ SCHEMA = """{
 
 
 def generate_script(cfg: dict, pick: dict) -> dict:
+    from .state import load_performance
     ch = cfg["channel"]
     target_words = int(cfg["video"]["target_minutes"] * 150)  # ~150 wpm spoken
-    user = f"""Channel: {ch['name']} — {ch['tagline']}
+    hints = load_performance().get("script_hints") or []
+    hint_block = ("\nLESSONS FROM THIS CHANNEL'S RETENTION DATA (apply them):\n- " + "\n- ".join(hints) + "\n") if hints else ""
+    user = f"""Channel: {ch['name']} — {ch['tagline']}{hint_block}
 Niche: {ch['niche']}
 Audience: {ch['audience']}
 Sign-off (must appear verbatim at the end of the 'close' section): {ch['signoff']}

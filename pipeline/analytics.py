@@ -54,6 +54,54 @@ def channel_totals() -> dict:
         return {}
 
 
+def fetch_retention(video_ids: list[str], days: int = 28) -> dict[str, dict]:
+    """Nose/body/tail retention per video from YouTube Analytics' audienceWatchRatio curve.
+    Returns {video_id: {"nose": ratio still watching at 5% of the video, "mid": at 50%, "tail": at 90%}}."""
+    ya = analytics_client()
+    end = date.today() - timedelta(days=1)
+    start = end - timedelta(days=days)
+    out = {}
+    for vid in video_ids[:12]:  # quota is cheap (1 unit each) but keep the review fast
+        try:
+            resp = ya.reports().query(
+                ids="channel==MINE", startDate=start.isoformat(), endDate=end.isoformat(),
+                metrics="audienceWatchRatio", dimensions="elapsedVideoTimeRatio", filters=f"video=={vid}",
+            ).execute()
+            rows = resp.get("rows", [])
+            if not rows:
+                continue
+            curve = {float(r[0]): float(r[1]) for r in rows}
+
+            def at(x):
+                k = min(curve, key=lambda e: abs(e - x))
+                return curve[k]
+            out[vid] = {"nose": round(at(0.05), 3), "mid": round(at(0.5), 3), "tail": round(at(0.9), 3)}
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] retention curve for {vid} failed: {str(e)[:120]}")
+    return out
+
+
+def retention_hints(ret: dict[str, dict]) -> list[str]:
+    """Turn retention diagnostics into concrete writing instructions for next week's script."""
+    if not ret:
+        return []
+    n = len(ret)
+    nose = sum(r["nose"] for r in ret.values()) / n
+    mid = sum(r["mid"] for r in ret.values()) / n
+    tail = sum(r["tail"] for r in ret.values()) / n
+    hints = []
+    if nose < 0.60:   # >40% gone in the first 5% of the video = "hook miss"
+        hints.append(f"Recent videos lost {100 - nose * 100:.0f}% of viewers in the first seconds. Make the hook ONE short sentence "
+                     "with the single most surprising number, then immediately show the stakes; no context first.")
+    if mid < 0.35:
+        hints.append(f"Only {mid * 100:.0f}% of viewers reach the midpoint. Move the worked example earlier (section s2 at the latest) "
+                     "and add a stronger forward tease at the end of s1 and s2.")
+    if tail < 0.20 and mid >= 0.35:
+        hints.append(f"Only {tail * 100:.0f}% reach the last 10%. Make the final section shorter and end on the action rule plus the "
+                     "next-video tease; no wind-down language.")
+    return hints
+
+
 def score_and_save(stats: dict[str, dict]) -> dict:
     pub = load_published()
     by_cat, by_fmt = defaultdict(list), defaultdict(list)
@@ -69,10 +117,14 @@ def score_and_save(stats: dict[str, dict]) -> dict:
     if not scored:
         return {}
     mean = sum(scored) / len(scored) or 1.0
+    long_ids = [p["video_id"] for p in pub if p.get("kind") == "long" and p.get("video_id") in stats][-8:]
+    ret = fetch_retention(long_ids)
     perf = {
         "category_scores": {c: round((sum(v) / len(v)) / mean, 3) for c, v in by_cat.items()},
         "format_scores": {f: round((sum(v) / len(v)) / mean, 3) for f, v in by_fmt.items()},
         "videos_scored": len(scored),
+        "retention": ret,
+        "script_hints": retention_hints(ret),
     }
     save_performance(perf)
     return perf
@@ -113,5 +165,12 @@ def weekly_report(cfg: dict, stats: dict, perf: dict, totals: dict, added: int) 
         lines += ["", "## What the audience rewards", ""]
         for c, v in sorted(perf["category_scores"].items(), key=lambda kv: -kv[1]):
             lines.append(f"- {c}: {v:.2f}x")
+        if perf.get("retention"):
+            lines += ["", "## Retention (share of viewers still watching)", "", "| Video | at 5% (nose) | at 50% | at 90% (tail) |", "|---|---|---|---|"]
+            titles = {p.get("video_id"): p["title"] for p in pub}
+            for vid, r in perf["retention"].items():
+                lines.append(f"| {titles.get(vid, vid)[:45]} | {r['nose'] * 100:.0f}% | {r['mid'] * 100:.0f}% | {r['tail'] * 100:.0f}% |")
+        if perf.get("script_hints"):
+            lines += ["", "## Automatic writing adjustments for next week", ""] + [f"- {h}" for h in perf["script_hints"]]
     lines += ["", f"Topic bank refilled with **{added}** new topics.", ""]
     return "\n".join(lines)
