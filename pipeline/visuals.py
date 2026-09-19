@@ -147,7 +147,8 @@ def chart_image(cfg: dict, chart: dict, w: int, h: int, out: Path) -> Path | Non
     img = gradient(w, h, st["bg_dark"], st["bg_dark2"], noise=False)
     d = ImageDraw.Draw(img)
     # top padding clears the lower-third heading strip (motion.TOP_SAFE); title + legend live in 0.17h..0.27h
-    pad_l, pad_r, pad_t, pad_b = int(w * 0.12), int(w * 0.06), int(h * 0.29), int(h * 0.14)
+    # bottom padding clears the burned-in caption band (~0.13h from the bottom) plus the x-axis labels
+    pad_l, pad_r, pad_t, pad_b = int(w * 0.12), int(w * 0.06), int(h * 0.29), int(h * 0.24)
     x0, y0, x1, y1 = pad_l, pad_t, w - pad_r, h - pad_b
     ystep = _nice_step((max(ys) - min(0, min(ys))) or 1, 5)
     ymin = math.floor(min(0, min(ys)) / ystep) * ystep
@@ -176,7 +177,7 @@ def chart_image(cfg: dict, chart: dict, w: int, h: int, out: Path) -> Path | Non
     while xv <= xmax + xstep * 0.01:
         d.text((X(xv), y1 + 12), _fmt_tick(xv), font=small, fill=(180, 190, 210), anchor="mt")
         xv += xstep
-    d.text(((x0 + x1) / 2, h - pad_b * 0.35), str(chart.get("x_label") or ""), font=small, fill=(200, 205, 220), anchor="mm")
+    d.text(((x0 + x1) / 2, y1 + int(h * 0.075)), str(chart.get("x_label") or ""), font=small, fill=(200, 205, 220), anchor="mm")
     title = str(chart.get("title") or "")[:80]
     tf = font(cfg, int(h * 0.05))
     title_w = (x1 - int(w * 0.24)) - x0           # leave the right quarter for the legend

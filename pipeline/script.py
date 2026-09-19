@@ -27,14 +27,21 @@ Retention rules (these decide whether the algorithm recommends the video):
         "There's a mechanic almost nobody checks until it's cost them — that's next."
         "Next week's one is the kind of thing you'll wish someone had told you at twenty-five."
   bad: anything mentioning mortgages, taxes, the Fed, a company, a percentage or a dollar figure.
+  Write a FRESH line in your own words every time — never reuse the example sentences above.
 - Any named person keeps the same name, gender and pronouns throughout; state gender implicitly via pronouns.
 Return ONLY valid JSON matching the schema requested."""
 
 SCHEMA = """{
   "title": "<= 60 chars, curiosity + specific number or contrast, no clickbait lies",
   "alt_titles": ["2 alternative titles"],
-  "thumbnail_text": "2-4 words, all caps, punchy, with a number or contrast (e.g. '1% = $180,000')",
-  "thumbnail_query": "2-4 word stock photo search for a striking, high-contrast image (an object, scene or a person's expressive face, e.g. 'shocked woman reading bill')",
+  "thumbnail": {
+    "hero": "THE number the viewer will search for, or the cost delta, <= 9 chars, e.g. '+$200K' | '7%' | '$1,348/mo'. Must appear in the title or be its direct consequence; NEVER a derived difference like '2%' when the title says 7%",
+    "hero_label": "2-4 words, all caps, e.g. 'MORE INTEREST' | 'MORTGAGE RATES'",
+    "hero_is_cost": true,
+    "compare": {"left": {"label": "5% RATE", "value": "$373K"}, "right": {"label": "7% RATE", "value": "$558K"}},
+    "icon": "one Lucide icon for the topic: home | car | piggy-bank | credit-card | briefcase | receipt | landmark | graduation-cap | heart-pulse | shopping-cart | chart-line | wallet",
+    "query": "3-5 word stock-photo search for ONE PERSON with an expression matching the title's emotion, e.g. 'worried man glasses portrait' | 'shocked woman laptop' | 'serious businesswoman office'"
+  },
   "description": "150-250 words. First line is a hook. Include 3 timestamps placeholders like [00:00], a one-line disclaimer, and a call to subscribe. No links.",
   "tags": ["12-18 lowercase tags"],
   "sections": [
@@ -92,8 +99,11 @@ Total narration length across all sections: about {target_words} words (±10%).
 Use 7 sections total: hook, s1..s5, close. Mark exactly 1-2 sections as short_worthy.
 The 'chart' must visualise the video's core worked example with 1-2 series and 4-12 points each; make the numbers consistent with the narration.
 Both chart series MUST be in the same unit and a similar magnitude (e.g. two dollar balances), never a price next to a total value — otherwise one line is flat.
-'thumbnail_text' must be 2-4 words containing a number or a stark contrast (e.g. '$50K TO EXERCISE', '1% = $100,000', 'RSUs VS OPTIONS').
-Also return 'thumbnail_query': a 2-4 word stock-photo search for the thumbnail background (a striking object, scene, or an expressive face that matches the emotion of the title).
+THUMBNAIL: 'hero' is the single number a scroller must see — the headline figure from the title or the cost it causes
+(e.g. title 'Why a 7% mortgage costs $200K more' -> hero '+$200K', label 'MORE INTEREST'; compare 5% vs 7% totals).
+'compare' is only for videos with two directly comparable figures in the same unit; otherwise set it to null.
+'hero_is_cost' is true when the hero is money lost / extra paid (shown in red), false when it is a gain or a rate (gold).
+'query' must describe a PERSON (face visible) whose expression matches the title's emotion — faces lift click-through.
 The three Shorts must each be a different angle on the topic (the number, the mistake, the rule) and must NOT repeat the long video's sentences.
 
 Return JSON exactly matching this schema:
@@ -103,10 +113,37 @@ Return JSON exactly matching this schema:
     return data
 
 
+_THUMB_ICONS = {"home", "car", "piggy-bank", "credit-card", "briefcase", "receipt", "landmark", "graduation-cap",
+                "heart-pulse", "shopping-cart", "chart-line", "wallet"}
+
+
 def _validate(d: dict, cfg: dict) -> None:
-    for k in ("title", "description", "tags", "sections", "shorts", "thumbnail_text"):
+    for k in ("title", "description", "tags", "sections", "shorts"):
         if k not in d:
             raise ValueError(f"Script missing key: {k}")
+    # thumbnail spec: normalise, and accept the pre-v3.2.1 flat keys (thumbnail_text / thumbnail_query) as a fallback
+    th = d.get("thumbnail") if isinstance(d.get("thumbnail"), dict) else {}
+    hero = str(th.get("hero") or d.get("thumbnail_text") or d["title"]).strip()[:12]
+    cmp_ = th.get("compare") if isinstance(th.get("compare"), dict) else None
+    if cmp_ and not all(isinstance(cmp_.get(s), dict) and cmp_[s].get("label") and cmp_[s].get("value") for s in ("left", "right")):
+        cmp_ = None
+    hic = th.get("hero_is_cost")
+    if isinstance(hic, str):                      # LLMs sometimes emit "false" as a string
+        hic = hic.strip().lower() in ("true", "yes", "1")
+    elif hic is None:
+        hic = hero.startswith(("+", "-")) or "cost" in d["title"].lower()
+    icon = th.get("icon")
+    d["thumbnail"] = {
+        "hero": hero,
+        "hero_label": str(th.get("hero_label") or "").strip()[:28].upper(),
+        "hero_is_cost": bool(hic),
+        "compare": cmp_ and {s: {"label": str(cmp_[s]["label"])[:14].upper(), "value": str(cmp_[s]["value"])[:10]} for s in ("left", "right")},
+        "icon": icon if isinstance(icon, str) and icon in _THUMB_ICONS else None,
+        "query": str(th.get("query") or d.get("thumbnail_query") or "worried person portrait").strip()[:60],
+    }
+    alts = d.get("alt_titles")
+    d["alt_titles"] = [str(a)[:100] for a in alts if str(a).strip()] if isinstance(alts, list) else []
+    d.setdefault("thumbnail_text", hero)   # older code paths / selftest still read this
     if len(d["sections"]) < 4:
         raise ValueError("Script has too few sections")
     d["title"] = d["title"][:100]

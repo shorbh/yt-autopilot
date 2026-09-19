@@ -161,7 +161,8 @@ def _diversify(beats: list[dict], first_is_hook: bool = False) -> list[dict]:
     """Pacing/variety guard applied after the LLM:
     1. no two consecutive plain callouts;
     2. plain callouts capped at MAX_CALLOUT_SHARE of all beats (excess become keyword image cards);
-    3. the very first beat of the hook is a visual, never a callout."""
+    3. the very first beat of the hook is a visual, never a callout;
+    4. no three consecutive beats with the same card layout."""
     prev_callout, k = False, 0
     for b in beats:
         if b["visual"].get("type") == "callout":
@@ -176,12 +177,22 @@ def _diversify(beats: list[dict], first_is_hook: bool = False) -> list[dict]:
     for b in callouts[allowed:]:  # keep the earliest ones (punchlines tend to be planned), convert the rest
         b["visual"] = _keyword_visual(b["text"], k)
         k += 1
+    # 3. the hook opens on a visual (before rule 4, so a triple created here is healed below)
     if first_is_hook and beats and beats[0]["visual"].get("type") in ("callout", "broll"):
         m = _NUM_IN_TEXT.search(beats[0]["text"])
         if m:
             beats[0]["visual"] = {"type": "bignumber", "value": m.group(1).strip(), "label": _key_phrase(beats[0]["text"], 8)}
         else:
             beats[0]["visual"] = _keyword_visual(beats[0]["text"], 1)  # photo card
+    # 4. never three cards of the SAME layout in a row (run #7: five bignumbers back to back). The third
+    #    becomes a keyword image card; chart/broll/character/compare are left alone (they carry their own imagery).
+    for i in range(2, len(beats)):
+        t0, t1, t2 = (beats[j]["visual"].get("type") for j in (i - 2, i - 1, i))
+        if t0 == t1 == t2 and t2 in ("bignumber", "callout", "icon_text", "formula", "list", "photo_text"):
+            # icon_text run -> photo card (odd k); photo_text run -> icon card (even k); anything else alternates
+            want = 1 if t2 == "icon_text" else (0 if t2 == "photo_text" else k % 2)
+            beats[i]["visual"] = _keyword_visual(beats[i]["text"], want)
+            k += 1
     return beats
 
 

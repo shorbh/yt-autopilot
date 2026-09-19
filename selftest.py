@@ -14,8 +14,10 @@ from pipeline.render import build_long_video, build_shorts, thumbnail
 
 SCRIPT = {
     "title": "What a 1% Fee Really Costs You",
-    "thumbnail_text": "1% = $100,000",
-    "thumbnail_query": "stack of coins desk",
+    "thumbnail": {"hero": "-$100K", "hero_label": "LOST TO FEES", "hero_is_cost": True, "icon": "piggy-bank",
+                  "compare": {"left": {"label": "0.1% FEE", "value": "$452K"}, "right": {"label": "1.1% FEE", "value": "$352K"}},
+                  "query": "worried man laptop portrait"},
+    "alt_titles": ["The 1% Fee That Eats $100,000"],
     "description": "A quick demo render.",
     "tags": ["finance", "index funds", "fees"],
     "chart": {

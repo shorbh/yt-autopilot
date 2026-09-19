@@ -505,52 +505,134 @@ def build_shorts(cfg: dict, script: dict, workdir: Path) -> list[dict]:
     return results
 
 
+_TW, _TH = 1280, 720
+_RED = (255, 90, 95)          # "cost" colour (money lost / extra paid)
+_GREEN = (61, 220, 151)       # "good" side of a comparison
+
+
+def _thumb_spec(script: dict) -> dict:
+    """Thumbnail spec with fallbacks for scripts produced before v3.2.1 (or selftest)."""
+    th = script.get("thumbnail") if isinstance(script.get("thumbnail"), dict) else {}
+    hero = str(th.get("hero") or script.get("thumbnail_text") or script["title"])[:12]
+    return {
+        "hero": hero,
+        "hero_label": str(th.get("hero_label") or "").upper(),
+        "hero_is_cost": bool(th.get("hero_is_cost", hero.startswith("+"))),
+        "compare": th.get("compare") if isinstance(th.get("compare"), dict) else None,
+        "icon": th.get("icon"),
+        "query": str(th.get("query") or script.get("thumbnail_query") or "worried person portrait"),
+    }
+
+
 def thumbnail(cfg: dict, script: dict, workdir: Path) -> Path:
-    """Primary thumbnail (A) + two variants for YouTube Studio's Test & Compare (which the API cannot drive):
-    B = same text on a different photo, C = the first alt title on photo A. Photo + big type only —
-    no cartoon character (v3.2). Returns the path of A."""
-    q = script.get("thumbnail_query") or script["sections"][0].get("visual_query", "finance")
-    photos = visuals.pexels_photos(q, [workdir / "thumb_bg.jpg", workdir / "thumb_bg2.jpg"])
+    """A = hero number + face photo (primary). B = versus layout when the script compares two figures, else the hero
+    on a second photo. C = the first alt title as text. All three go to the artifact for Studio's Test & Compare
+    (the API cannot set variants). Patterned on what wins in the feed: a face, one huge number, red = cost,
+    green vs red for comparisons, a topic icon so the subject reads at feed size. Returns the path of A."""
+    spec = _thumb_spec(script)
+    photos = visuals.pexels_photos(spec["query"], [workdir / "thumb_bg.jpg", workdir / "thumb_bg2.jpg"])
     pa = photos[0] if photos else None
     pb = photos[1] if len(photos) > 1 else pa
-    a = _thumbnail(cfg, script, workdir / "thumbnail.jpg", pa, text=None)
+    a = _thumb_hero(cfg, spec, workdir / "thumbnail.jpg", pa)
     try:
-        _thumbnail(cfg, script, workdir / "thumbnail_B.jpg", pb, text=None)
-        alt_text = (script.get("alt_titles") or [None])[0]
-        _thumbnail(cfg, script, workdir / "thumbnail_C.jpg", pa, text=alt_text)
+        if spec["compare"]:
+            _thumb_versus(cfg, spec, workdir / "thumbnail_B.jpg", pa)
+        else:
+            _thumb_hero(cfg, spec, workdir / "thumbnail_B.jpg", pb)
+        alts = script.get("alt_titles")
+        alt = (alts[0] if isinstance(alts, list) and alts else None) or script["title"]
+        _thumb_hero(cfg, spec, workdir / "thumbnail_C.jpg", pb, title_text=alt)
     except Exception as e:  # noqa: BLE001 - variants are a bonus, never fatal
         print(f"[warn] thumbnail variants failed: {str(e)[:120]}")
     return a
 
 
-def _thumbnail(cfg: dict, script: dict, out: Path, photo: Path | None, text: str | None) -> Path:
-    """Split layout: bold fitted text (up to 3 lines) on the left, dimmed photo fading in on the right."""
-    from PIL import Image, ImageDraw, ImageEnhance
-
-    W, H = 1280, 720
+def _thumb_canvas(cfg: dict, photo: Path | None, photo_side: str = "right", brightness: float = 0.75):
+    """Navy gradient with the photo cover-cropped and blended in on one side (or full-bleed when photo_side='full')."""
+    from PIL import Image, ImageEnhance
     st = cfg["style"]
-    bg = visuals.gradient(W, H, st["bg_dark"], st["bg_dark2"])
-    if photo and Path(photo).exists():
-        ph = Image.open(photo).convert("RGB")
-        ph = ph.resize((max(W, int(ph.width * H / ph.height)), H))
-        ph = ph.crop((max(0, (ph.width - W) // 2), 0, max(0, (ph.width - W) // 2) + W, H))
-        ph = ImageEnhance.Brightness(ph).enhance(0.7)
-        # alpha ramp: transparent on the left 45%, opaque on the right
-        mask = Image.linear_gradient("L").rotate(90, expand=True).resize((W, H))  # dark->light left->right
-        mask = mask.point(lambda v: max(0, min(255, int((v - 90) * 2.2))))
-        bg = Image.composite(ph, bg, mask)
-    d = ImageDraw.Draw(bg)
-    text = " ".join(str(text or script.get("thumbnail_text") or script["title"]).upper().split())
-    # fit the WHOLE text (no 30-char cut): wrap -> shrink -> ellipsis, 1-3 lines, first line in the highlight colour
-    fnt, lines, lh = motion.fit_text_box(cfg, d, text, W * 0.64, H * 0.72, 150, floor=72, line_spacing=1.08, max_lines=3)
-    y = H / 2 - len(lines) * lh / 2
-    for i, line in enumerate(lines):
-        d.text((60, y + i * lh), line, font=fnt, fill=hex_to_rgb(st["accent2"]) if i == 0 else (255, 255, 255),
-               stroke_width=max(5, fnt.size // 18), stroke_fill=(0, 0, 0))
-    d.rectangle([0, H - 22, W, H], fill=hex_to_rgb(st["accent"]))
-    d.text((W - 28, H - 46), cfg["channel"]["name"].upper(), font=visuals.font(cfg, 28), fill=(255, 255, 255), anchor="rm",
+    bg = visuals.gradient(_TW, _TH, st["bg_dark"], st["bg_dark2"])
+    if not (photo and Path(photo).exists()):
+        return bg
+    ph = ImageEnhance.Brightness(motion._cover(Image.open(photo).convert("RGB"), _TW, _TH)).enhance(brightness)
+    if photo_side == "full":
+        return ph
+    # the photo is cover-cropped from its centre, so the subject's face is usually near the middle; shift the
+    # visible window so the face lands in the photo half rather than under the text
+    shift = int(_TW * 0.18)
+    ph = ph.transform((_TW, _TH), Image.AFFINE, (1, 0, -shift if photo_side == "right" else shift, 0, 1, 0))
+    mask = Image.linear_gradient("L").rotate(90 if photo_side == "right" else -90, expand=True).resize((_TW, _TH))
+    mask = mask.point(lambda v: max(0, min(255, int((v - 95) * 2.4))))
+    return Image.composite(ph, bg, mask)
+
+
+def _thumb_chrome(cfg: dict, d, img, icon: str | None) -> None:
+    """Brand strip + wordmark + topic icon badge (bottom-left, clear of all text boxes) shared by every layout."""
+    st = cfg["style"]
+    d.rectangle([0, _TH - 20, _TW, _TH], fill=hex_to_rgb(st["accent"]))
+    d.text((_TW - 28, _TH - 44), cfg["channel"]["name"].upper(), font=visuals.font(cfg, 26), fill=(255, 255, 255), anchor="rm",
            stroke_width=3, stroke_fill=(0, 0, 0))
-    bg.save(out, "JPEG", quality=88, optimize=True)
+    ic = assets_remote.icon(icon, motion.ICON_BASE, (255, 255, 255)) if icon else None
+    if ic is not None:
+        ic = ic.resize((64, 64))
+        bx, by, bs = 40, _TH - 20 - 28 - 100, 100
+        d.rounded_rectangle([bx, by, bx + bs, by + bs], radius=22, fill=(20, 27, 55), outline=hex_to_rgb(st["accent"]), width=4)
+        img.paste(ic, (bx + 18, by + 18), ic)
+
+
+def _thumb_hero(cfg: dict, spec: dict, out: Path, photo: Path | None, title_text: str | None = None) -> Path:
+    """Left: one huge number (red if it is a cost, gold otherwise) with a short label; right: the face photo.
+    With title_text the number is replaced by the fitted title (variant C)."""
+    from PIL import ImageDraw
+    st = cfg["style"]
+    img = _thumb_canvas(cfg, photo, "right")
+    d = ImageDraw.Draw(img)
+    box_w = _TW * 0.56
+    if title_text:
+        text = " ".join(str(title_text).upper().split())
+        fnt, lines, lh = motion.fit_text_box(cfg, d, text, box_w, _TH * 0.56, 132, floor=68, line_spacing=1.06, max_lines=3)
+        y = _TH * 0.44 - len(lines) * lh / 2   # sits above the icon badge (bottom-left) even at three lines
+        for i, line in enumerate(lines):
+            d.text((56, y + i * lh), line, font=fnt, fill=hex_to_rgb(st["accent2"]) if i == 0 else (255, 255, 255),
+                   stroke_width=max(5, fnt.size // 18), stroke_fill=(0, 0, 0))
+    else:
+        hero = spec["hero"]
+        col = _RED if spec["hero_is_cost"] else hex_to_rgb(st["accent2"])
+        hf = motion._fit_font(cfg, d, hero, box_w, 250, floor=110)
+        label = spec["hero_label"]
+        total = hf.size * 1.05 + (74 if label else 0)
+        y0 = max(50, _TH * 0.46 - total / 2)   # centred slightly above the middle; the icon badge lives bottom-left
+        d.text((56, y0), hero, font=hf, fill=col, stroke_width=max(8, hf.size // 16), stroke_fill=(0, 0, 0))
+        if label:
+            motion.draw_fit(cfg, d, label, (60, y0 + hf.size * 1.12, 60 + box_w, y0 + hf.size * 1.12 + 80), 64,
+                            (255, 255, 255), floor=40, max_lines=1, stroke=5)
+    _thumb_chrome(cfg, d, img, spec.get("icon"))
+    img.save(out, "JPEG", quality=90, optimize=True)
+    return out
+
+
+def _thumb_versus(cfg: dict, spec: dict, out: Path, photo: Path | None) -> Path:
+    """Split screen: left half green-tinted (the cheaper / better figure), right half red-tinted (the costly one),
+    the face photo dimmed behind, a white divider, label + value stacked in each half."""
+    from PIL import Image, ImageDraw
+    cmp_ = spec["compare"]
+    img = _thumb_canvas(cfg, photo, "full", brightness=0.5)
+    tint = Image.new("RGBA", (_TW, _TH), (0, 0, 0, 0))
+    td = ImageDraw.Draw(tint)
+    td.rectangle([0, 0, _TW // 2, _TH], fill=_GREEN + (70,))
+    td.rectangle([_TW // 2, 0, _TW, _TH], fill=_RED + (80,))
+    td.rectangle([0, 0, _TW, int(_TH * 0.42)], fill=(11, 16, 32, 120))   # darker band behind the text
+    img = Image.alpha_composite(img.convert("RGBA"), tint).convert("RGB")
+    d = ImageDraw.Draw(img)
+    d.rectangle([_TW // 2 - 3, 0, _TW // 2 + 3, _TH], fill=(255, 255, 255))
+    for k, (side, col) in enumerate(((cmp_["left"], _GREEN), (cmp_["right"], _RED))):
+        x0 = 40 + k * (_TW // 2)
+        x1 = x0 + _TW // 2 - 80
+        motion.draw_fit(cfg, d, str(side["label"]).upper(), (x0, 44, x1, 150), 104, col, floor=56, max_lines=1, stroke=7)
+        vf = motion._fit_font(cfg, d, str(side["value"]), x1 - x0, 150, floor=72)
+        d.text((x0, 160), str(side["value"]), font=vf, fill=(255, 255, 255), stroke_width=max(6, vf.size // 16), stroke_fill=(0, 0, 0))
+    _thumb_chrome(cfg, d, img, spec.get("icon"))
+    img.save(out, "JPEG", quality=90, optimize=True)
     return out
 
 
