@@ -102,7 +102,24 @@ def retention_hints(ret: dict[str, dict]) -> list[str]:
     return hints
 
 
-def score_and_save(stats: dict[str, dict]) -> dict:
+def adaptive_length(cfg: dict, ret: dict[str, dict], current: float | None) -> float:
+    """Earn length from retention. Watch hours = views x minutes watched, so a longer video only helps if
+    viewers stay: mid-video retention >= 45% (avg of recent videos) -> +1 min; < 30% -> -1 min; otherwise hold.
+    Always clamped to [video.min_minutes, video.max_minutes] — the channel never drifts into short-form."""
+    v = cfg["video"]
+    lo, hi = float(v.get("min_minutes", 7)), float(v.get("max_minutes", 12))
+    cur = float(current or v.get("target_minutes", 8))
+    if len(ret) >= 2:  # need at least two videos of data before moving
+        mid = sum(r["mid"] for r in ret.values()) / len(ret)
+        if mid >= 0.45:
+            cur += 1
+        elif mid < 0.30:
+            cur -= 1
+    return max(lo, min(hi, cur))
+
+
+def score_and_save(stats: dict[str, dict], cfg: dict | None = None) -> dict:
+    from .state import load_performance
     pub = load_published()
     by_cat, by_fmt = defaultdict(list), defaultdict(list)
     scored = []
@@ -119,12 +136,14 @@ def score_and_save(stats: dict[str, dict]) -> dict:
     mean = sum(scored) / len(scored) or 1.0
     long_ids = [p["video_id"] for p in pub if p.get("kind") == "long" and p.get("video_id") in stats][-8:]
     ret = fetch_retention(long_ids)
+    prev = load_performance()
     perf = {
         "category_scores": {c: round((sum(v) / len(v)) / mean, 3) for c, v in by_cat.items()},
         "format_scores": {f: round((sum(v) / len(v)) / mean, 3) for f, v in by_fmt.items()},
         "videos_scored": len(scored),
         "retention": ret,
         "script_hints": retention_hints(ret),
+        "target_minutes": adaptive_length(cfg, ret, prev.get("target_minutes")) if cfg else prev.get("target_minutes"),
     }
     save_performance(perf)
     return perf
@@ -172,5 +191,9 @@ def weekly_report(cfg: dict, stats: dict, perf: dict, totals: dict, added: int) 
                 lines.append(f"| {titles.get(vid, vid)[:45]} | {r['nose'] * 100:.0f}% | {r['mid'] * 100:.0f}% | {r['tail'] * 100:.0f}% |")
         if perf.get("script_hints"):
             lines += ["", "## Automatic writing adjustments for next week", ""] + [f"- {h}" for h in perf["script_hints"]]
+        if perf.get("target_minutes"):
+            v = cfg["video"]
+            lines += ["", f"**Target length next week:** {perf['target_minutes']:.0f} min "
+                          f"(adaptive, floor {v.get('min_minutes', 7)} / cap {v.get('max_minutes', 12)})"]
     lines += ["", f"Topic bank refilled with **{added}** new topics.", ""]
     return "\n".join(lines)

@@ -2,8 +2,8 @@ name: Produce & schedule weekly videos
 
 on:
   schedule:
-    # Every Monday 06:00 UTC -> long video publishes 2 PM ET same day, Shorts on Tue/Thu/Sat
-    - cron: "0 6 * * 1"
+    # Monday + Thursday 06:00 UTC -> long video publishes 2 PM ET same day; each run's Shorts fill the next 3 days
+    - cron: "0 6 * * 1,4"
   workflow_dispatch:
     inputs:
       dry_run:

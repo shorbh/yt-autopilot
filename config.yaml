@@ -27,7 +27,9 @@ video:
   width: 1920
   height: 1080
   fps: 30
-  target_minutes: 8          # long-form target length (6-10 recommended)
+  target_minutes: 8          # starting long-form length. The Sunday review ADAPTS this from retention data
+  min_minutes: 7             #   (mid-video retention >= 45% -> +1 min, < 30% -> -1 min) but never outside
+  max_minutes: 12            #   [min_minutes, max_minutes]. Watch hours = views x minutes watched, so length is earned.
   captions: true
   b_roll: "auto"             # auto = Pexels if PEXELS_API_KEY set, else generated slides
   music: false               # keep false unless you add royalty-free tracks to assets/music/
@@ -36,6 +38,8 @@ video:
 topics:
   trends: true               # scan Google News + Google Trends RSS (free, no key) before picking from the bank
   trend_min_fit: 7           # 0-10 score from the LLM; below this the evergreen bank is used
+  trend_max_per_days: 7      # at most ONE trend-sourced video per this many days; the other run(s) stay evergreen
+  playlists: true            # add every long video to a playlist per category (created on first use)
   trend_queries:             # Google News searches (last 7 days, US edition)
     - "mortgage rates"
     - "Fed interest rate decision"
@@ -54,10 +58,10 @@ shorts:
   max_seconds: 58
 
 publishing:
-  # Long video publishes at first run; Shorts are scheduled through the week.
+  # Two long videos a week (produce.yml cron: Mon + Thu 06:00 UTC); each run's 3 Shorts fill the days between.
   timezone: "America/New_York"
   long_publish_hour: 14      # 2 PM ET = strong US daytime + India evening
-  shorts_offset_days: [1, 3, 5]
+  shorts_offset_days: [1, 2, 3]   # Mon run -> Tue/Wed/Thu Shorts; Thu run -> Fri/Sat/Sun
   shorts_publish_hour: 12
   privacy: "private"         # private + publishAt = scheduled. Use "public" to publish immediately.
   category_id: "27"          # 27 = Education

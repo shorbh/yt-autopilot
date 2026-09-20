@@ -39,7 +39,7 @@ def long_description(cfg: dict, script: dict, stamps: list[str], topic: str | No
         parts.append("In this video: " + " · ".join(facts))
     if stamps:
         parts.append("Chapters:\n" + "\n".join(stamps))
-    nxt = watch_next(exclude_topic=topic)
+    nxt = watch_next(exclude_topic=topic)   # newest first = the video the narrator recommends in the close
     if nxt:
         parts.append("Watch next:\n" + "\n".join(f"▶ {p.get('title') or ch['name']}: https://youtu.be/{p['video_id']}" for p in nxt))
     parts.append(ch["signoff"])

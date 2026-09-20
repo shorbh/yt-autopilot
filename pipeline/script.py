@@ -23,8 +23,9 @@ Retention rules (these decide whether the algorithm recommends the video):
 - MICRO-HOOKS: every section except 'close' ends with a one-sentence forward tease that opens a
   curiosity gap ("and the second mistake costs even more", "the twist is in year three"). Never a summary.
 - TAIL: the 'close' section never says "in summary", "to recap", "that's all" or fades out. It delivers the
-  action rule in two or three sentences, then ONE generic forward tease, then the sign-off.
-  The tease must NOT name a topic, product, number or event (next week's subject is chosen from the news):
+  action rule in two or three sentences, then ONE bridge sentence, then the sign-off. The bridge is either a
+  by-name recommendation of the PREVIOUS video when one is given, or otherwise a generic forward tease that
+  must NOT name a topic, product, number or event (next week's subject is chosen from the news):
   good: "Next week I'm pulling apart a money habit that looks smart and quietly isn't."
         "There's a mechanic almost nobody checks until it's cost them — that's next."
         "Next week's one is the kind of thing you'll wish someone had told you at twenty-five."
@@ -81,16 +82,32 @@ SCHEMA = """{
 }"""
 
 
-def generate_script(cfg: dict, pick: dict) -> dict:
+def target_minutes(cfg: dict) -> float:
+    """Adaptive length from the weekly review, clamped to config floor/cap; config value until data exists."""
+    from .state import load_performance
+    v = cfg["video"]
+    lo, hi = float(v.get("min_minutes", 7)), float(v.get("max_minutes", 12))
+    t = load_performance().get("target_minutes") or v["target_minutes"]
+    return max(lo, min(hi, float(t)))
+
+
+def generate_script(cfg: dict, pick: dict, previous: dict | None = None) -> dict:
+    """`previous` = the channel's most recent long video ({title, video_id}); the close recommends it by name
+    (a verbal end-screen bridge) — the one forward link we CAN make without pre-committing next week's topic."""
     from .state import load_performance
     ch = cfg["channel"]
-    target_words = int(cfg["video"]["target_minutes"] * 150)  # ~150 wpm spoken
+    target_words = int(target_minutes(cfg) * 150)  # ~150 wpm spoken
     hints = load_performance().get("script_hints") or []
     hint_block = ("\nLESSONS FROM THIS CHANNEL'S RETENTION DATA (apply them):\n- " + "\n- ".join(hints) + "\n") if hints else ""
     news_block = ""
     if pick.get("news_hook"):
         news_block = (f"\nNEWS HOOK (this week's event; use it in the hook and title so the video rides the search wave, "
                       f"but explain the underlying mechanism so the video stays useful for years): {pick['news_hook']}\n")
+    prev_block = ""
+    if previous and previous.get("title"):
+        prev_block = (f"\nPREVIOUS VIDEO ON THE CHANNEL: \"{previous['title']}\" — in the 'close' section, INSTEAD of the generic "
+                      f"tease, recommend this video by name in one natural sentence (e.g. \"If you haven't seen why ..., "
+                      f"that one's on the channel now\"), then the sign-off.\n")
     user = f"""Channel: {ch['name']} — {ch['tagline']}{hint_block}
 Niche: {ch['niche']}
 Audience: {ch['audience']}
@@ -98,7 +115,7 @@ Sign-off (must appear verbatim at the end of the 'close' section): {ch['signoff'
 
 TOPIC: {pick['topic']}
 CATEGORY: {pick['category']}
-FORMAT TO FOLLOW: {pick['format']}{news_block}
+FORMAT TO FOLLOW: {pick['format']}{news_block}{prev_block}
 
 Total narration length across all sections: about {target_words} words (±10%).
 Use 7 sections total: hook, s1..s5, close. Mark exactly 1-2 sections as short_worthy.

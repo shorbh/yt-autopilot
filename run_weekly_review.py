@@ -25,7 +25,7 @@ def main() -> int:
         return 0
 
     stats = fetch_video_stats()
-    perf = score_and_save(stats) or load_performance()
+    perf = score_and_save(stats, cfg) or load_performance()
     totals = channel_totals()
     added = refill_topics(cfg, perf)
     report = weekly_report(cfg, stats, perf, totals, added)

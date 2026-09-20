@@ -5,6 +5,7 @@ One weekly run (1 long + 3 Shorts + 1 thumbnail) ~ 6,450 units. Fine.
 """
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -104,3 +105,52 @@ def upload_video(cfg: dict, path: Path, title: str, description: str, tags: list
         except HttpError as e:  # custom thumbnails need a verified phone number on the channel
             print(f"[warn] thumbnail not set: {e}")
     return video_id
+
+
+# ------------------------------------------------------------------ playlists (session-time lever)
+
+def _playlist_title(category: str) -> str:
+    return category.replace("_", " ").strip().title()   # "big_life_money" -> "Big Life Money"
+
+
+def add_to_category_playlist(cfg: dict, category: str, video_id: str) -> str | None:
+    """Add a long video to the playlist named after its topic category, creating the playlist the first time.
+    Playlist IDs are cached in data/playlists.json (committed with the other state). Never fatal — a playlist
+    failure must not fail the upload. Costs: playlists.insert 50 units (once per category), playlistItems.insert 50."""
+    from .config import DATA
+    if not cfg.get("topics", {}).get("playlists", True):
+        return None
+    cache_path = DATA / "playlists.json"
+    try:
+        cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
+    except (OSError, ValueError):
+        cache = {}
+    yt = youtube_client()
+    title = _playlist_title(category)
+    pid = cache.get(category)
+    try:
+        if not pid:
+            # look for an existing playlist with that title (e.g. created by hand) before making a new one
+            token = None
+            while not pid:
+                resp = yt.playlists().list(part="snippet", mine=True, maxResults=50, pageToken=token).execute()
+                for item in resp.get("items", []):
+                    if item["snippet"]["title"].strip().lower() == title.lower():
+                        pid = item["id"]
+                        break
+                token = resp.get("nextPageToken")
+                if not token:
+                    break
+        if not pid:
+            body = {"snippet": {"title": title,
+                                "description": f"{cfg['channel']['name']} — every explainer on {title.lower()}. {cfg['channel']['tagline']}"},
+                    "status": {"privacyStatus": "public"}}
+            pid = yt.playlists().insert(part="snippet,status", body=body).execute()["id"]
+            print(f"      created playlist '{title}' ({pid})")
+        yt.playlistItems().insert(part="snippet", body={"snippet": {"playlistId": pid, "resourceId": {"kind": "youtube#video", "videoId": video_id}}}).execute()
+        cache[category] = pid
+        cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
+        return pid
+    except Exception as e:  # noqa: BLE001 - HttpError, RefreshError, network, disk: a playlist must never fail a run
+        print(f"[warn] playlist '{title}' not updated: {str(e)[:160]}")
+        return None

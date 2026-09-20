@@ -18,9 +18,9 @@ from datetime import datetime
 from pathlib import Path
 
 from pipeline.config import BUILD, load_config
-from pipeline.describe import long_description, short_description
+from pipeline.describe import long_description, short_description, watch_next
 from pipeline.render import build_long_video, build_shorts, contact_sheet, thumbnail
-from pipeline.script import generate_script, word_count
+from pipeline.script import generate_script, target_minutes, word_count
 from pipeline.state import record_published
 from pipeline.topics import pick_topic
 
@@ -44,8 +44,10 @@ def main() -> int:
     pick = pick_topic(cfg=cfg, forced=args.topic or None)
     print(f"[1/5] Topic: {pick['topic']}  ({pick['category']} · {pick['format'].split(':')[0]} · {pick.get('source', 'bank')})")
 
-    script = generate_script(cfg, pick)
-    print(f"[2/5] Script: '{script['title']}'  ~{word_count(script)} words  ({time.time()-t0:.0f}s)")
+    prev = (watch_next(exclude_topic=pick["topic"], n=1) or [None])[0]   # most recent long video -> verbal bridge
+    script = generate_script(cfg, pick, previous=prev)
+    print(f"[2/5] Script: '{script['title']}'  ~{word_count(script)} words, target {target_minutes(cfg):.0f} min"
+          + (f", bridges to '{prev['title'][:40]}'" if prev else "") + f"  ({time.time()-t0:.0f}s)")
 
     workdir = BUILD / f"{datetime.now():%Y%m%d}-{slugify(script['title'])}"
     workdir.mkdir(parents=True, exist_ok=True)
@@ -70,15 +72,17 @@ def main() -> int:
         print(f"Done in {time.time()-t0:.0f}s")
         return 0
 
-    from pipeline.upload import publish_at, upload_video
+    from pipeline.upload import add_to_category_playlist, publish_at, upload_video
 
     pub = cfg["publishing"]
     long_id = upload_video(cfg, Path(long["path"]), script["title"], desc, script["tags"],
                            publish_at(cfg, 0, pub["long_publish_hour"]), thumbnail=thumb)
+    # record FIRST: state must know about the upload even if the playlist step blows up
     record_published({"kind": "long", "video_id": long_id, "title": script["title"], "topic": pick["topic"],
                       "category": pick["category"], "format": pick["format"], "duration": long["duration"],
                       "source": pick.get("source", "bank"), "headline": pick.get("headline", "")})
     print(f"[5/5] Uploaded long video: https://youtu.be/{long_id}")
+    add_to_category_playlist(cfg, pick["category"], long_id)
 
     for i, sh in enumerate(shorts):
         day = pub["shorts_offset_days"][i % len(pub["shorts_offset_days"])]
