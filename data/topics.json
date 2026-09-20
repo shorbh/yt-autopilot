@@ -19,7 +19,12 @@
       "What bond yields are and why they move stock prices",
       "The Rule of 72: estimate any doubling time in your head",
       "Rebalancing: why selling winners is the boring secret of steady returns",
-      "Sequence-of-returns risk: why the year you retire matters more than your average return"
+      "Sequence-of-returns risk: why the year you retire matters more than your average return",
+      "Tax-advantaged accounts compared: Roth IRA vs Traditional 401(k) breakeven math across tax brackets",
+      "Expense ratios explained: how a 0.05% vs a 0.75% fund changes your retirement age by 4 years",
+      "Emergency funds in action: high-yield savings accounts vs short-term T-bills for your 6-month cash cushion",
+      "Dividend reinvestment (DRIP): the total return difference between taking cash payouts and auto-compounding",
+      "Asset location strategy: why holding bonds in taxable accounts vs tax-sheltered accounts costs you thousands"
     ],
     "money_psychology": [
       "Lifestyle creep: how a raise disappears and how to catch it",
@@ -28,7 +33,12 @@
       "Mental accounting: why a tax refund feels like free money and what that costs you",
       "Hedonic adaptation: why the new car stops feeling new in 3 months",
       "Why comparing salaries with friends makes you poorer",
-      "The sunk cost fallacy in your finances: cars, degrees, subscriptions"
+      "The sunk cost fallacy in your finances: cars, degrees, subscriptions",
+      "The 48-hour rule: how a two-day cart pause stops 80% of impulse purchases",
+      "Present bias: why your brain values 50 dollars today twice as much as 100 dollars next year",
+      "The decoy effect: how adding a useless third option forces you to overspend by 30 percent",
+      "Status quo bias: how staying with your default bank account costs you 240 dollars a year",
+      "The IKEA effect: why building your own budget makes you irrationally attached to failing plans"
     ],
     "debt_and_credit": [
       "How credit card interest is actually calculated (daily, not monthly)",
@@ -37,7 +47,11 @@
       "How a credit score is built: the five factors weighted",
       "Buy now, pay later: what the fine print costs you",
       "Refinancing explained: when it saves thousands and when it's a trap",
-      "Why lenders love a 0% APR offer more than you do"
+      "Why lenders love a 0% APR offer more than you do",
+      "Balance transfer credit cards: the 3% transfer fee versus the 0% APR math",
+      "Credit utilization secrets: why paying your bill twice a month raises your score faster",
+      "Settling debt for pennies on the dollar: the hidden tax bomb on forgiven balances over $600",
+      "Authorized user piggybacking: adding a relative to an aged account to instantly inflate credit history"
     ],
     "saving_and_budgeting": [
       "The 50/30/20 rule: where it works and where it breaks",
@@ -46,7 +60,12 @@
       "Automating money: the one-hour setup that runs your finances for years",
       "The latte factor is wrong; here is what actually moves the needle",
       "Sinking funds: budgeting for the expenses that 'surprise' you every year",
-      "Zero-based budgeting vs pay-yourself-first: a decision guide"
+      "Zero-based budgeting vs pay-yourself-first: a decision guide",
+      "The 1/365 rule: calculating the daily opportunity cost of impulse purchases",
+      "Quarterly financial audits: the 4-step Sunday routine that prevents lifestyle creep",
+      "Cash-flow mapping vs net-worth tracking: which metric to prioritize at every income tier",
+      "The 72-hour cart delay: a behavioral circuit breaker to stop overspending",
+      "Bill negotiation scripts: how to cut fixed monthly expenses by 15% in under an hour"
     ],
     "big_life_money": [
       "Rent vs buy: the real math including the costs people forget",
@@ -55,7 +74,12 @@
       "How much car can you afford: the 20/4/10 rule and its critics",
       "College degree ROI: how to compute payback period before enrolling",
       "Wedding, house, baby: sequencing big expenses without wrecking your 30s",
-      "Emergency fund vs paying debt vs investing: the order of operations"
+      "Emergency fund vs paying debt vs investing: the order of operations",
+      "Indexed Universal Life (IUL) insurance: the math behind the hidden fees and why agents push it",
+      "Backdoor Roth IRA: the step-by-step contribution mechanism and the pro-rata tax trap",
+      "Term life vs whole life insurance: cost-per-thousand-benefit analysis over a 30-year horizon",
+      "Health Savings Account (HSA): the triple tax advantage strategy and receipt-saving mechanism",
+      "0% APR balance transfer credit cards: the mathematical tipping point of transfer fees versus interest savings"
     ],
     "income_and_career": [
       "How to calculate your real hourly wage (commute, taxes, gear included)",
@@ -63,7 +87,12 @@
       "Side income taxes: what freelancers get wrong in year one",
       "Equity compensation explained: RSUs, options, vesting in plain English",
       "The 4% rule: what it says, where it came from, and its modern critics",
-      "Coast FIRE explained with a worked example"
+      "Coast FIRE explained with a worked example",
+      "The 50/30/20 rule audited: why housing costs broke the classic budget framework",
+      "Lifestyle creep math: how a 20% raise can leave you with zero extra savings",
+      "Traditional vs. Roth 401(k): the exact income threshold where Roth loses money",
+      "Job hopping vs. internal promotion: calculating the 10-year earnings gap",
+      "The hidden cost of zero-sum PTO: unpaid leave versus unlimited vacation policies"
     ],
     "systems_and_history": [
       "How banks create money when they lend (fractional reserve, simply)",
@@ -72,7 +101,12 @@
       "How index funds were invented and why Wall Street hated them",
       "What a recession is, what it does to jobs and markets, and what to do about it",
       "How compound interest was discovered and why it feels unnatural",
-      "How central banks set interest rates and why your mortgage cares"
+      "How central banks set interest rates and why your mortgage cares",
+      "How fiat currency replaced the gold standard in 1971 and what backing a currency actually means today",
+      "How the 2008 financial crisis spread from subprime mortgages to global markets in 7 steps",
+      "How credit scores were invented in 1989 and how the FICO algorithm mathematically weighs your financial life",
+      "How sovereign debt defaults happen and what happened when Argentina defaulted in 2001",
+      "How insurance companies invest your premiums to pay claims and still make billions"
     ]
   }
 }
