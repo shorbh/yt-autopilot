@@ -40,5 +40,47 @@
     "format": "case study: two fictional people make opposite choices; follow their numbers over 10-30 years",
     "parent": "_arItix7pNQ",
     "recorded_at": "2026-09-19T14:54:46.162564+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "dcRxC-9fdmg",
+    "title": "Why Credit Card Interest Daily Compounding Costs You More",
+    "topic": "How credit card interest is actually calculated (daily, not monthly)",
+    "category": "debt_and_credit",
+    "format": "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
+    "duration": 378.733333,
+    "source": "bank",
+    "headline": "",
+    "recorded_at": "2026-09-21T11:17:38.914872+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "X6RYZ36KqA8",
+    "title": "Your card charges interest daily",
+    "topic": "How credit card interest is actually calculated (daily, not monthly)",
+    "category": "debt_and_credit",
+    "format": "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
+    "parent": "dcRxC-9fdmg",
+    "recorded_at": "2026-09-21T11:17:42.319790+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "6TMbwezrV4s",
+    "title": "How missing one payment ruins you",
+    "topic": "How credit card interest is actually calculated (daily, not monthly)",
+    "category": "debt_and_credit",
+    "format": "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
+    "parent": "dcRxC-9fdmg",
+    "recorded_at": "2026-09-21T11:17:44.309480+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "ZAwvlfxoLvM",
+    "title": "The mid-month payment trick",
+    "topic": "How credit card interest is actually calculated (daily, not monthly)",
+    "category": "debt_and_credit",
+    "format": "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
+    "parent": "dcRxC-9fdmg",
+    "recorded_at": "2026-09-21T11:17:46.594442+00:00"
   }
 ]
