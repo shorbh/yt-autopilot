@@ -82,5 +82,47 @@
     "format": "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
     "parent": "dcRxC-9fdmg",
     "recorded_at": "2026-09-21T11:17:46.594442+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "GZtSyKc4ht0",
+    "title": "Authorized User Piggybacking: 5 Mistakes That Kill Your Credit",
+    "topic": "Authorized user piggybacking: adding a relative to an aged account to instantly inflate credit history",
+    "category": "debt_and_credit",
+    "format": "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs",
+    "duration": 294.766667,
+    "source": "bank",
+    "headline": "",
+    "recorded_at": "2026-09-24T11:44:52.027111+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "GDorYSSj4Vw",
+    "title": "The Authorized User Trap",
+    "topic": "Authorized user piggybacking: adding a relative to an aged account to instantly inflate credit history",
+    "category": "debt_and_credit",
+    "format": "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs",
+    "parent": "GZtSyKc4ht0",
+    "recorded_at": "2026-09-24T11:44:55.875436+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "zH7kWZuQeRA",
+    "title": "Stop Doing This Credit Trick",
+    "topic": "Authorized user piggybacking: adding a relative to an aged account to instantly inflate credit history",
+    "category": "debt_and_credit",
+    "format": "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs",
+    "parent": "GZtSyKc4ht0",
+    "recorded_at": "2026-09-24T11:44:58.984254+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "MpnsymqBaPE",
+    "title": "The Mortgage Approval Check",
+    "topic": "Authorized user piggybacking: adding a relative to an aged account to instantly inflate credit history",
+    "category": "debt_and_credit",
+    "format": "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs",
+    "parent": "GZtSyKc4ht0",
+    "recorded_at": "2026-09-24T11:45:01.737114+00:00"
   }
 ]
