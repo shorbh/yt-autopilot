@@ -40,6 +40,10 @@ def main() -> int:
     cfg = load_config()
     t0 = time.time()
 
+    if not args.dry_run:  # fail in 2 s, not after a 6-minute render, when the token is dead
+        from pipeline.upload import preflight
+        print(f"[0/5] YouTube auth OK — channel: {preflight()}")
+
     # forced topic skips the trend scan (saves an LLM call); otherwise trend scout first, evergreen bank second
     pick = pick_topic(cfg=cfg, forced=args.topic or None)
     print(f"[1/5] Topic: {pick['topic']}  ({pick['category']} · {pick['format'].split(':')[0]} · {pick.get('source', 'bank')})")

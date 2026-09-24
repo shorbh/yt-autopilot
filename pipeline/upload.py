@@ -34,6 +34,21 @@ def youtube_client():
     return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
 
+def preflight() -> str:
+    """Prove the refresh token still works BEFORE spending six minutes rendering (1 quota unit).
+    Returns the channel title. Raises RuntimeError with the exact fix when the token is dead."""
+    from google.auth.exceptions import RefreshError
+    try:
+        resp = youtube_client().channels().list(part="snippet", mine=True).execute()
+        return resp["items"][0]["snippet"]["title"]
+    except RefreshError as e:
+        raise RuntimeError(
+            "YouTube refresh token rejected (invalid_grant: expired or revoked). Fix: run `python setup_auth.py "
+            "client_secret.json` locally (the OAuth app must be in Production, and pick the brand channel), paste the "
+            "new value into the YT_REFRESH_TOKEN repository secret, then re-run this workflow. Nothing was uploaded."
+        ) from e
+
+
 def analytics_client():
     cid, secret, refresh = env("YT_CLIENT_ID"), env("YT_CLIENT_SECRET"), env("YT_REFRESH_TOKEN")
     creds = Credentials(None, refresh_token=refresh, client_id=cid, client_secret=secret,
