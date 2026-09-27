@@ -1,0 +1,29 @@
+{
+  "category_scores": {
+    "big_life_money": 1.737,
+    "debt_and_credit": 0.632
+  },
+  "format_scores": {
+    "case study: two fictional people make opposite choices; follow their numbers over 10-30 years": 1.737,
+    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 1.094,
+    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 0.169
+  },
+  "videos_scored": 3,
+  "retention": {
+    "_arItix7pNQ": {
+      "nose": 0.722,
+      "mid": 0.278,
+      "tail": 0.167
+    },
+    "dcRxC-9fdmg": {
+      "nose": 0.8,
+      "mid": 0.4,
+      "tail": 0.4
+    }
+  },
+  "script_hints": [
+    "Only 34% of viewers reach the midpoint. Move the worked example earlier (section s2 at the latest) and add a stronger forward tease at the end of s1 and s2."
+  ],
+  "target_minutes": 8.0,
+  "updated_at": "2026-09-27T10:20:40.812757+00:00"
+}

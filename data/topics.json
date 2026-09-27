@@ -24,7 +24,12 @@
       "Expense ratios explained: how a 0.05% vs a 0.75% fund changes your retirement age by 4 years",
       "Emergency funds in action: high-yield savings accounts vs short-term T-bills for your 6-month cash cushion",
       "Dividend reinvestment (DRIP): the total return difference between taking cash payouts and auto-compounding",
-      "Asset location strategy: why holding bonds in taxable accounts vs tax-sheltered accounts costs you thousands"
+      "Asset location strategy: why holding bonds in taxable accounts vs tax-sheltered accounts costs you thousands",
+      "Turnover ratio friction: how hidden portfolio churn costs taxable accounts 0.6% annually in realized capital gains",
+      "Net asset value (NAV) vs market price: why buying an ETF at a premium or discount eats your initial yield",
+      "Target-date funds under the hood: the glide-path equity-to-bond shift and whether you are paying for autopilot",
+      "Securities lending revenue in ETFs: how fund managers offset your expense ratio and who pockets the risk",
+      "Wash-sale rules decoded: the 30-day trap of tax-loss harvesting in taxable brokerages and how to legally bypass it"
     ],
     "money_psychology": [
       "Lifestyle creep: how a raise disappears and how to catch it",
@@ -38,7 +43,10 @@
       "Present bias: why your brain values 50 dollars today twice as much as 100 dollars next year",
       "The decoy effect: how adding a useless third option forces you to overspend by 30 percent",
       "Status quo bias: how staying with your default bank account costs you 240 dollars a year",
-      "The IKEA effect: why building your own budget makes you irrationally attached to failing plans"
+      "The IKEA effect: why building your own budget makes you irrationally attached to failing plans",
+      "The scarcity mindset: how living paycheck-to-paycheck permanently rewires your risk tolerance by 40 percent",
+      "Hot hand fallacy in investing: why beating the market once convinces 80 percent of traders they are financial geniuses",
+      "The pain of paying: why tapping a plastic card triggers 30 percent less brain activity than handing over physical cash"
     ],
     "debt_and_credit": [
       "How credit card interest is actually calculated (daily, not monthly)",
@@ -51,7 +59,10 @@
       "Balance transfer credit cards: the 3% transfer fee versus the 0% APR math",
       "Credit utilization secrets: why paying your bill twice a month raises your score faster",
       "Settling debt for pennies on the dollar: the hidden tax bomb on forgiven balances over $600",
-      "Authorized user piggybacking: adding a relative to an aged account to instantly inflate credit history"
+      "Authorized user piggybacking: adding a relative to an aged account to instantly inflate credit history",
+      "Hard inquiries versus soft inquiries: the exact credit score drop for a mortgage pull versus a rate check",
+      "Credit card utilization tipping points: crossing the 30%, 10%, and 3% thresholds and the score penalty for 0%",
+      "Statute of limitations on debt: how zombie debt revives when you make a single 10-dollar payment"
     ],
     "saving_and_budgeting": [
       "The 50/30/20 rule: where it works and where it breaks",
@@ -65,7 +76,12 @@
       "Quarterly financial audits: the 4-step Sunday routine that prevents lifestyle creep",
       "Cash-flow mapping vs net-worth tracking: which metric to prioritize at every income tier",
       "The 72-hour cart delay: a behavioral circuit breaker to stop overspending",
-      "Bill negotiation scripts: how to cut fixed monthly expenses by 15% in under an hour"
+      "Bill negotiation scripts: how to cut fixed monthly expenses by 15% in under an hour",
+      "The 48-hour income quarantine: how to stop lifestyle inflation after a raise",
+      "Expense trimming by friction: the 3-account routing method to freeze impulse buying",
+      "The 80/20 fixed cost audit: how to slash housing and transportation without moving",
+      "Bi-weekly pay periods vs monthly budgets: fixing the 27-paycheck calendar gap",
+      "The 10% rule of joy: guilt-free spending allocations that prevent budget burnout"
     ],
     "big_life_money": [
       "Rent vs buy: the real math including the costs people forget",
@@ -79,7 +95,16 @@
       "Backdoor Roth IRA: the step-by-step contribution mechanism and the pro-rata tax trap",
       "Term life vs whole life insurance: cost-per-thousand-benefit analysis over a 30-year horizon",
       "Health Savings Account (HSA): the triple tax advantage strategy and receipt-saving mechanism",
-      "0% APR balance transfer credit cards: the mathematical tipping point of transfer fees versus interest savings"
+      "0% APR balance transfer credit cards: the mathematical tipping point of transfer fees versus interest savings",
+      "RSUs vs stock options vs ESPP: the taxation timeline and holding-period math",
+      "Traditional 401k vs Roth 401k: the marginal tax rate tipping point in retirement",
+      "Umbrella insurance: calculating your net worth exposure and liability threshold",
+      "Maxing out an HSA vs employer 401k match: the exact decision matrix for high earners",
+      "Self-employment estimated taxes: the quarterly penalty formula and buffer fund calculation",
+      "Index fund fee drag: how a 0.5% expense ratio costs you six figures over 30 years",
+      "Refinancing a mortgage: calculating the break-even month based on closing costs and interest spread",
+      "Inherited IRA SECURE Act rules: the 10-year withdrawal distribution strategy to minimize tax brackets",
+      "Solar panel ROI: calculating payback periods factoring in net metering changes and financing interest"
     ],
     "income_and_career": [
       "How to calculate your real hourly wage (commute, taxes, gear included)",
@@ -92,7 +117,12 @@
       "Lifestyle creep math: how a 20% raise can leave you with zero extra savings",
       "Traditional vs. Roth 401(k): the exact income threshold where Roth loses money",
       "Job hopping vs. internal promotion: calculating the 10-year earnings gap",
-      "The hidden cost of zero-sum PTO: unpaid leave versus unlimited vacation policies"
+      "The hidden cost of zero-sum PTO: unpaid leave versus unlimited vacation policies",
+      "The 15% rule for employer matches: calculating when a poor 401(k) match beats a taxable brokerage",
+      "Overtime vs. promotion: at what hourly threshold does exempt salary status cut your real pay",
+      "The 3-month emergency fund myth: calculating your personal solvency runway based on fixed-to-variable expense ratios",
+      "Career pivoting math: calculating the 3-year net worth impact of taking a 20% pay cut for a higher-growth industry",
+      "Remote work tax traps: how moving across state or national lines alters your net take-home pay by more than 10%"
     ],
     "systems_and_history": [
       "How banks create money when they lend (fractional reserve, simply)",
@@ -106,7 +136,12 @@
       "How the 2008 financial crisis spread from subprime mortgages to global markets in 7 steps",
       "How credit scores were invented in 1989 and how the FICO algorithm mathematically weighs your financial life",
       "How sovereign debt defaults happen and what happened when Argentina defaulted in 2001",
-      "How insurance companies invest your premiums to pay claims and still make billions"
+      "How insurance companies invest your premiums to pay claims and still make billions",
+      "How modern credit card networks process a transaction across 4 distinct fees in under 3 seconds",
+      "How bond yield curves invert and why that specific signal has predicted every recession since 1955",
+      "How the Bretton Woods system was designed in 1944 and why it collapsed under 35 dollars per ounce of gold",
+      "How corporate buybacks replaced dividends after the 1982 SEC Rule 10b-18 change",
+      "How negative interest rates function in practice and why depositors in Denmark paid to hold mortgages"
     ]
   }
 }
