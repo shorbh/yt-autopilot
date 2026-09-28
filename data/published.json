@@ -124,5 +124,47 @@
     "format": "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs",
     "parent": "GZtSyKc4ht0",
     "recorded_at": "2026-09-24T11:45:01.737114+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "AybAPFZv4gU",
+    "title": "The 4% Rule: Will Your Retirement Portfolio Survive 30 Years?",
+    "topic": "The 4% rule: what it says, where it came from, and its modern critics",
+    "category": "income_and_career",
+    "format": "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
+    "duration": 354.32,
+    "source": "bank",
+    "headline": "",
+    "recorded_at": "2026-09-28T12:13:49.658870+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "F-A5sQJQQXU",
+    "title": "Why the 4% Rule Fails Early",
+    "topic": "The 4% rule: what it says, where it came from, and its modern critics",
+    "category": "income_and_career",
+    "format": "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
+    "parent": "AybAPFZv4gU",
+    "recorded_at": "2026-09-28T12:13:52.962675+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "qlvCoq1TCeE",
+    "title": "The $7,000 Retirement Mistake",
+    "topic": "The 4% rule: what it says, where it came from, and its modern critics",
+    "category": "income_and_career",
+    "format": "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
+    "parent": "AybAPFZv4gU",
+    "recorded_at": "2026-09-28T12:13:54.961083+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "6xHF4mO-3l8",
+    "title": "Taxes Destroy Your Safe Withdrawal",
+    "topic": "The 4% rule: what it says, where it came from, and its modern critics",
+    "category": "income_and_career",
+    "format": "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
+    "parent": "AybAPFZv4gU",
+    "recorded_at": "2026-09-28T12:13:56.345994+00:00"
   }
 ]
