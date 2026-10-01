@@ -166,5 +166,47 @@
     "format": "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end",
     "parent": "AybAPFZv4gU",
     "recorded_at": "2026-09-28T12:13:56.345994+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "7X58K8Kax-U",
+    "title": "Why a 7% Mortgage Costs $200,000 More",
+    "topic": "How a 7% mortgage rate shifts the lifetime math of renting versus buying a $400,000 home",
+    "category": "big_life_money",
+    "format": "history lesson: where this rule/product came from, what changed, what it means for you now",
+    "duration": 434.504,
+    "source": "trend",
+    "headline": "Mortgage rates have just surpassed 7% for the first time in well over a year",
+    "recorded_at": "2026-10-01T11:59:30.668036+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "hEiq1EZ9JkM",
+    "title": "The 7% Mortgage Trap",
+    "topic": "How a 7% mortgage rate shifts the lifetime math of renting versus buying a $400,000 home",
+    "category": "big_life_money",
+    "format": "history lesson: where this rule/product came from, what changed, what it means for you now",
+    "parent": "7X58K8Kax-U",
+    "recorded_at": "2026-10-01T11:59:34.456746+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "_Cx5KbD2hPw",
+    "title": "Month 1 Mortgage Math",
+    "topic": "How a 7% mortgage rate shifts the lifetime math of renting versus buying a $400,000 home",
+    "category": "big_life_money",
+    "format": "history lesson: where this rule/product came from, what changed, what it means for you now",
+    "parent": "7X58K8Kax-U",
+    "recorded_at": "2026-10-01T11:59:36.665792+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "jOcnnzcVBkc",
+    "title": "Why Buying Right Now Is Hard",
+    "topic": "How a 7% mortgage rate shifts the lifetime math of renting versus buying a $400,000 home",
+    "category": "big_life_money",
+    "format": "history lesson: where this rule/product came from, what changed, what it means for you now",
+    "parent": "7X58K8Kax-U",
+    "recorded_at": "2026-10-01T11:59:38.976354+00:00"
   }
 ]
