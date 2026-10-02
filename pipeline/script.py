@@ -191,7 +191,8 @@ def _clean_prose(text: str) -> str:
     return text.strip()
 
 
-_SMALL = {"a", "an", "the", "and", "or", "of", "on", "in", "at", "to", "for", "with", "vs", "by", "from", "per"}
+_SMALL = {"a", "an", "the", "and", "or", "of", "on", "in", "at", "to", "for", "with", "vs", "vs.", "by", "from", "per"}
+_ACRONYMS = {"ira", "iras", "etf", "etfs", "hsa", "apr", "apy", "hysa", "fdic", "irs", "cds", "fico", "rsu", "rsus", "pmi", "fha", "llc", "s&p", "usa", "gdp", "cpi"}
 _QWORDS = ("how", "why", "what", "when", "should", "is", "can", "do", "does", "which", "are", "will")
 
 
@@ -201,16 +202,19 @@ def headline(title: str) -> str:
     t = " ".join(str(title).split())
     if not t:
         return t
-    t = re.sub(r"\b(\d{2,3})k\b", r"$\1K", t, flags=re.I)                 # 75k -> $75K
+    t = re.sub(r"\b(401|403|457)k\b", r"\1(k)", t, flags=re.I)             # retirement plans, not dollars
+    t = re.sub(r"\b(?!(?:401|403|457)\()(\d{2,3})k\b", r"$\1K", t, flags=re.I)   # 75k -> $75K
     t = re.sub(r"\$\$", "$", t)
     words = t.split()
     out = []
     for i, w in enumerate(words):
-        lw = w.lower()
+        lw = w.lower().rstrip("?.,!")
         if lw == "i":
             out.append("I")
+        elif lw in _ACRONYMS:
+            out.append(w.upper())
         elif i not in (0, len(words) - 1) and lw in _SMALL:
-            out.append(lw)
+            out.append(w.lower())
         elif w.isupper() and len(w) > 1 and not w[0].isdigit():            # keep acronyms (IRA, ETF, HSA)
             out.append(w)
         else:

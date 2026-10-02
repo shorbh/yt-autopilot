@@ -19,7 +19,7 @@ from pathlib import Path
 from . import assets_remote, motion, visuals
 from .config import ROOT, hex_to_rgb
 from .storyboard import _key_phrase, storyboard
-from .tts import concat_audio, ffprobe_duration, provider_for, synthesize, synthesize_sections
+from .tts import _eleven_available, concat_audio, ffprobe_duration, provider_for, synthesize, synthesize_sections
 
 GAP = 0.35            # silence between sections (audio) — mirrored in video timing
 CHAPTER_SECS = 1.3    # chapter title card length (audio is delayed by the same amount)
@@ -495,9 +495,9 @@ def build_shorts(cfg: dict, script: dict, workdir: Path) -> list[dict]:
         prov = provider_for(cfg, len(sh["narration"]))
         info = synthesize(cfg, sh["narration"], mp3, provider=prov)
         if info["duration"] > max_s - 1:  # too long -> speak faster once (same provider, so the voice is consistent)
-            fast = {**cfg, "voice": {**cfg["voice"], "rate": "+14%", "elevenlabs_speed": 1.18}}
+            fast = {**cfg, "voice": {**cfg["voice"], "rate": "+14%", "elevenlabs_speed": 1.18, "fish_speed": 1.15}}
             if prov == "elevenlabs":
-                provider_for(cfg, len(sh["narration"]))   # debit the second pass from the credit reservation
+                _eleven_available(len(sh["narration"]))   # debit the second pass from the credit reservation
             info = synthesize(fast, sh["narration"], mp3, provider=prov)
         return {"id": f"short_{k}", "heading": sh.get("hook_title", ""), "narration": sh["narration"],
                 "audio": str(mp3), "duration": info["duration"], "words": info["words"], "_wd": wd}

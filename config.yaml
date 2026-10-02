@@ -18,8 +18,13 @@ channel:
   disclaimer: "This video is for education only and is not financial advice."
 
 voice:
-  provider: "auto"           # auto = ElevenLabs when ELEVENLABS_API_KEY is set and credits cover the video, else edge
-  # --- ElevenLabs (premium; free tier 10k credits/month; Starter $5 = 30k; turbo model = 0.5 credit/char) ---
+  provider: "auto"           # auto walks `order`; or force one of fish | elevenlabs | edge (edge always remains the safety net)
+  order: ["fish", "elevenlabs", "edge"]
+  # --- Fish Audio (FISH_API_KEY). s2.1-pro-free = production model at $0; word timings via Fish ASR ($0.36/audio hour) ---
+  fish_model: "s2.1-pro-free"
+  fish_reference_id: ""      # voice id from fish.audio/app/discovery (pick an English narrator); empty = Fish's default voice
+  fish_speed: 1.0
+  # --- ElevenLabs (premium; free tier is refused from CI; Starter $5 = 30k credits; turbo model = 0.5 credit/char) ---
   elevenlabs_voice_id: "nPczCjzI2devNBz1zQrb"   # "Brian" — deep, warm US narrator. Browse: elevenlabs.io/voice-library
   elevenlabs_model: "eleven_turbo_v2_5"        # half the credit cost of multilingual_v2, quality is close
   elevenlabs_stability: 0.45                   # lower = more expressive, higher = more monotone

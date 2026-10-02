@@ -1,19 +1,22 @@
 """Text-to-speech with word timings for captions.
 
-Providers (voice.provider in config.yaml):
-  * elevenlabs — premium neural voice (ELEVENLABS_API_KEY). Uses the /with-timestamps endpoint so we get
-    character alignment -> word boundaries, same contract as edge-tts. Credits are checked BEFORE a video
-    starts so the whole video gets one voice; when the monthly quota can't cover it, the whole video uses
-    edge-tts. (Only if ElevenLabs errors mid-video after retries does a single section fall back to edge —
-    a voice change beats a failed run.)
-  * edge — free Microsoft Edge neural TTS (edge-tts). Always available; the fallback.
-  * auto — elevenlabs when a key exists and credits suffice, else edge.
+Providers (voice.provider in config.yaml; `auto` walks voice.order, default fish -> elevenlabs -> edge):
+  * fish — Fish Audio `s2.1-pro-free` (FISH_API_KEY): production-quality voice at $0, no CI/datacenter block.
+    The TTS endpoint has no timestamps, so word timings come from Fish's own ASR (`/v1/asr`,
+    ignore_timestamps=false, $0.36 per audio hour ≈ 15¢/week for this channel): phrase segments, with the
+    words inside each segment spread by character length. If ASR fails the video still renders — captions use
+    the estimated-timing path.
+  * elevenlabs — premium neural voice (ELEVENLABS_API_KEY) via /with-timestamps (true word alignment).
+    Credits are checked BEFORE a video starts; the free tier is refused from CI (401 detected_unusual_activity).
+  * edge — free Microsoft Edge neural TTS (edge-tts) with word boundaries. Always available; the final fallback.
+One provider per video: the decision is made once per video so the voice never changes between sections.
 """
 from __future__ import annotations
 
 import asyncio
 import base64
 import json
+import re
 import subprocess
 import threading
 import time
@@ -31,6 +34,77 @@ _quota: dict | None = None   # {"remaining": int, "ok": bool} cached per run
 
 class _ElevenDisabled(RuntimeError):
     """ElevenLabs refused at the account level; don't retry this run."""
+
+
+_FISH = "https://api.fish.audio/v1"
+_fish_state = {"ok": None}   # None = untested, True/False after the first call this run
+_TAG_RE = re.compile(r"\[[^\]]{1,40}\]|\((?:break|long-break|breath)\)")   # Fish emotion/pause cues, never captioned
+
+
+def _fish_ok() -> bool:
+    return bool(env("FISH_API_KEY")) and _fish_state["ok"] is not False
+
+
+def _fish_synth(cfg: dict, text: str, out_mp3: Path) -> list[dict]:
+    """Fish Audio TTS (free model) + ASR alignment -> word timings. Raises on TTS failure; ASR failure -> []."""
+    v = cfg["voice"]
+    key = env("FISH_API_KEY")
+    body = {"text": text, "format": "mp3", "mp3_bitrate": 128, "normalize": True, "latency": "normal",
+            "prosody": {"speed": float(v.get("fish_speed", 1.0)), "volume": 0}}
+    if v.get("fish_reference_id"):
+        body["reference_id"] = str(v["fish_reference_id"])
+    r = requests.post(f"{_FISH}/tts", json=body, timeout=240,
+                      headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                               "model": str(v.get("fish_model", "s2.1-pro-free"))})
+    if r.status_code in (401, 402, 403):
+        _fish_state["ok"] = False
+        raise RuntimeError(f"Fish Audio {r.status_code}: {r.text[:160]} (key/permissions/balance) — disabled for this run")
+    if r.status_code != 200 or len(r.content) < 1000:
+        raise RuntimeError(f"Fish Audio {r.status_code}: {r.text[:160]}")
+    out_mp3.write_bytes(r.content)
+    _fish_state["ok"] = True
+    return _fish_align(key, out_mp3, text)
+
+
+def _fish_align(key: str, mp3: Path, text: str) -> list[dict]:
+    """Word timings from Fish ASR segments. Words of the SPOKEN text are mapped onto the transcript's segments
+    by proportional position (robust to the ASR hearing '$1,200' as 'twelve hundred dollars')."""
+    try:
+        with open(mp3, "rb") as fh:
+            r = requests.post(f"{_FISH}/asr", headers={"Authorization": f"Bearer {key}", "model": "transcribe-1"},
+                              files={"audio": ("a.mp3", fh, "audio/mpeg")}, data={"language": "en", "ignore_timestamps": "false"},
+                              timeout=240)
+        if r.status_code != 200:
+            print(f"[warn] Fish ASR {r.status_code}: {r.text[:120]} — captions will use estimated timings")
+            return []
+        segs = sorted((s for s in r.json().get("segments", []) if s.get("text", "").strip() and s["end"] > s["start"]),
+                      key=lambda s: float(s["start"]))
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] Fish ASR failed ({str(e)[:100]}) — captions will use estimated timings")
+        return []
+    toks = _TAG_RE.sub("", text).split()
+    if not segs or not toks:
+        return []
+    # distribute our tokens over segments in proportion to each segment's share of the transcript's characters
+    seg_chars = [len(s["text"]) for s in segs]
+    total_chars = float(sum(seg_chars)) or 1.0
+    words, ti = [], 0
+    for i, s in enumerate(segs):
+        n = len(toks) - ti if i == len(segs) - 1 else max(1, round(len(toks) * seg_chars[i] / total_chars))
+        chunk = toks[ti:ti + n]
+        ti += n
+        if not chunk:
+            continue
+        w_total = float(sum(len(t) + 1 for t in chunk))
+        t0, span = float(s["start"]), float(s["end"]) - float(s["start"])
+        acc = 0.0
+        for t in chunk:
+            d = span * (len(t) + 1) / w_total
+            words.append({"start": t0 + acc, "end": t0 + acc + d, "text": t})
+            acc += d
+        if ti >= len(toks):
+            break
+    return words
 
 
 def ffprobe_duration(path: Path) -> float:
@@ -91,20 +165,33 @@ def _eleven_quota() -> dict:
         return _quota
 
 
-def provider_for(cfg: dict, text_chars: int) -> str:
-    """Decide the voice for ONE video (all of its sections). Reserves the characters so a later video in the
-    same run sees the reduced balance. Returns 'elevenlabs' or 'edge'."""
-    want = str(cfg["voice"].get("provider", "auto")).lower()
-    if want == "edge":
-        return "edge"
+def _eleven_available(text_chars: int) -> bool:
+    if not env("ELEVENLABS_API_KEY"):
+        return False
     q = _eleven_quota()
     need = int(text_chars * 1.05) + 50
     with _quota_lock:
         if q["ok"] and q["remaining"] >= need:
-            q["remaining"] -= need
+            q["remaining"] -= need      # reserve so a later video in this run sees the reduced balance
+            return True
+    return False
+
+
+def provider_for(cfg: dict, text_chars: int) -> str:
+    """Decide the voice for ONE video (all of its sections). Returns 'fish' | 'elevenlabs' | 'edge'.
+    voice.provider = a provider name forces it (with edge as the safety net), or 'auto' walks voice.order."""
+    v = cfg["voice"]
+    want = str(v.get("provider", "auto")).lower()
+    order = [want] if want != "auto" else [str(p).lower() for p in (v.get("order") or ["fish", "elevenlabs", "edge"])]
+    for p in order:
+        if p == "fish" and _fish_ok():
+            return "fish"
+        if p == "elevenlabs" and _eleven_available(text_chars):
             return "elevenlabs"
-    if want == "elevenlabs":
-        print(f"[warn] ElevenLabs requested but {q['remaining']:,} chars left < {need:,} needed; this video uses edge-tts")
+        if p == "edge":
+            return "edge"
+    if want not in ("auto", "edge"):
+        print(f"[warn] voice provider '{want}' unavailable (key, credits or an earlier refusal); this video uses edge-tts")
     return "edge"
 
 
@@ -163,6 +250,23 @@ def synthesize(cfg: dict, text: str, out_mp3: Path, retries: int = 3, provider: 
     with _quota_lock:   # account refused earlier in this run -> don't even try
         if provider == "elevenlabs" and _quota is not None and not _quota["ok"]:
             provider = "edge"
+    if provider == "fish" and not _fish_ok():
+        provider = "edge"
+    if provider == "fish":
+        for attempt in range(2):
+            try:
+                words = _fish_synth(cfg, text, out_mp3)
+                dur = ffprobe_duration(out_mp3)
+                if dur < 0.5:
+                    raise RuntimeError("Fish Audio produced empty audio")
+                return {"duration": dur, "words": words, "provider": "fish"}
+            except Exception as e:  # noqa: BLE001
+                last = e
+                if not _fish_ok():
+                    break
+                time.sleep(3)
+        print(f"[warn] Fish Audio failed ({str(last)[:140]}); falling back to edge-tts")
+        provider = "edge"
     if provider == "elevenlabs":
         for attempt in range(2):
             try:
