@@ -58,12 +58,13 @@ each sentence is spoken. Rules:
 - Vary the LAYERS so the video is never text-only. Mix these across each section:
     icon_text    = a concept statement (<= 10 words) + one icon from the allowed list, e.g. "A grant is a promise" + "handshake".
     photo_text   = scene-setting or emotional sentence: short phrase + a 2-4 word stock-photo query (objects/places, no faces).
-    character    = any sentence about a named or implied PERSON ("Sarah, 30, earns...", "imagine an investor who..."):
-                   give character {name, gender, mood}; it is rendered as a real stock portrait photo chosen from gender
-                   and mood. Gender MUST follow the script's name/pronouns (Sarah/she -> female, Mike/he -> male;
-                   unknown -> neutral). mood in: neutral, happy, excited, worried, sad, stressed, shocked, scared, thinking,
-                   serious, proud, confused. Add "text" (<= 12 words) and optional "stat" ("$39,000").
-                   The same name must keep the same gender across the whole video.
+    character    = ONLY for FICTIONAL or generic people invented by the script ("Sarah, 30, earns...", "imagine an investor
+                   who..."): give character {name, gender, mood}; it is rendered as a stock portrait photo chosen from gender
+                   and mood. NEVER for a real, named person, official, economist, CEO, company or institution — a stock face
+                   would misrepresent them; use icon_text or photo_text (query = the institution/building/logo-free scene) instead.
+                   Gender MUST follow the script's name/pronouns (Sarah/she -> female, Mike/he -> male; unknown -> neutral).
+                   mood in: neutral, happy, excited, worried, sad, stressed, shocked, scared, thinking, serious, proud, confused.
+                   Add "text" (<= 12 words) and optional "stat" ("$39,000"). The same name keeps the same gender all video.
     compare      = two people or two options; when the sides are people add "character" to each side instead of "icon"
                    (people are shown as initial avatars there).
     callout      = a rule or punchline, <= 12 words. Use SPARINGLY: at most 1 in 4 beats.
@@ -291,8 +292,25 @@ def _normalise(section_id: str, sentences: list[str], raw_beats: list) -> list[d
     return _diversify(paced, first_is_hook=(section_id == "hook"))
 
 
-def storyboard(cfg: dict, sections: list[dict], chart: dict | None) -> dict[str, list[dict]]:
-    """Returns {section_id: [beat, ...]}. Each beat: {from, to, text, visual}."""
+def _strip_characters(beats: list[dict]) -> list[dict]:
+    """Grounded stories are about REAL people and companies; a stock face labelled with a real name is a
+    misrepresentation (run #14 showed a random face as a named Fed economist). Convert to icon/photo cards."""
+    k = 0
+    for b in beats:
+        v = b["visual"]
+        if v.get("type") == "character":
+            b["visual"] = _keyword_visual(b["text"], k)
+            k += 1
+        elif v.get("type") == "compare":
+            for side in ("left", "right"):
+                if isinstance(v.get(side), dict):
+                    v[side].pop("character", None)
+    return beats
+
+
+def storyboard(cfg: dict, sections: list[dict], chart: dict | None, real_people: bool = False) -> dict[str, list[dict]]:
+    """Returns {section_id: [beat, ...]}. Each beat: {from, to, text, visual}.
+    real_people=True (grounded money stories): the character layer is disabled — see _strip_characters."""
     numbered = []
     sent_map: dict[str, list[str]] = {}
     for s in sections:
@@ -301,6 +319,9 @@ def storyboard(cfg: dict, sections: list[dict], chart: dict | None) -> dict[str,
         numbered.append(f"## Section '{s['id']}' — heading: {s['heading']}\n" +
                         "\n".join(f"{i + 1}. {t}" for i, t in enumerate(sents)))
     chart_hint = f"\nThe video's chart shows: {chart.get('title')}" if chart else "\nThere is no chart; do not use type 'chart'."
+    if real_people:
+        chart_hint += ("\nThis video is about REAL people, companies and events. Do NOT use type 'character' at all and do not "
+                       "add 'character' to compare sides; use icon_text / photo_text for people and institutions.")
     user = ("Storyboard these sections. Every sentence number must be covered exactly once, in order.\n"
             f"Channel: {cfg['channel']['name']}.{chart_hint}\n"
             f"Allowed icon names: {', '.join(ICONS)}\n\n" + "\n\n".join(numbered) +
@@ -313,7 +334,8 @@ def storyboard(cfg: dict, sections: list[dict], chart: dict | None) -> dict[str,
         by_id = {}
     out = {}
     for s in sections:
-        out[s["id"]] = _normalise(s["id"], sent_map[s["id"]], by_id.get(s["id"], []))
+        beats = _normalise(s["id"], sent_map[s["id"]], by_id.get(s["id"], []))
+        out[s["id"]] = _strip_characters(beats) if real_people else beats
     return out
 
 

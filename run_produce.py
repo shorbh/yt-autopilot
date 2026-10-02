@@ -19,7 +19,7 @@ from pathlib import Path
 
 from pipeline.config import BUILD, load_config
 from pipeline.describe import long_description, short_description, watch_next
-from pipeline.render import build_long_video, build_shorts, contact_sheet, thumbnail
+from pipeline.render import build_long_video, build_shorts, contact_sheet, first_frame, thumbnail
 from pipeline.script import generate_script, target_minutes, word_count
 from pipeline.state import record_published
 from pipeline.topics import pick_topic
@@ -66,6 +66,8 @@ def main() -> int:
 
     t2 = time.time()
     shorts = [] if args.no_shorts else build_shorts(cfg, script, workdir)
+    for sh in shorts:   # hook.jpg next to each short.mp4: the cold-open frame, auditable from the artifact
+        first_frame(Path(sh["path"]), Path(sh["path"]).with_name("hook.jpg"))
     print(f"[4/5] Shorts rendered: {len(shorts)} in {time.time()-t2:.0f}s")
 
     # description: hook + subscribe link above the fold, context body, key facts, real chapters, watch-next, hashtags

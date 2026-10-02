@@ -344,11 +344,11 @@ def _music_track(cfg: dict) -> Path | None:
 
 def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, out_mp4: Path,
               portrait: bool, chart: dict | None, chapters: bool,
-              beats_by_id: dict | None = None) -> tuple[Path, list[float]]:
+              beats_by_id: dict | None = None, real_people: bool = False) -> tuple[Path, list[float]]:
     """Returns (video path, per-section start offsets in seconds)."""
     fps = cfg["video"]["fps"]
     if beats_by_id is None:
-        beats_by_id = storyboard(cfg, sections, chart)
+        beats_by_id = storyboard(cfg, sections, chart, real_people=real_people)
     broll = _BrollCache(workdir, portrait)
     outro = chapters and cfg["video"].get("outro", True)
     # 1) Plan every clip (cheap, sequential) ...
@@ -474,7 +474,7 @@ def build_long_video(cfg: dict, script: dict, workdir: Path) -> dict:
     w, h = cfg["video"]["width"], cfg["video"]["height"]
     sections = synthesize_sections(cfg, script["sections"], workdir)
     out, offsets = _assemble(cfg, sections, w, h, workdir, workdir / "long.mp4", portrait=False,
-                             chart=script.get("chart"), chapters=True)
+                             chart=script.get("chart"), chapters=True, real_people=bool(script.get("real_people")))
     total = ffprobe_duration(out)
     stamps = [f"{int(o // 60):02d}:{int(o % 60):02d} {s['heading']}" for s, o in zip(sections, offsets)]
     if stamps:
@@ -505,7 +505,7 @@ def build_shorts(cfg: dict, script: dict, workdir: Path) -> list[dict]:
     # TTS for all Shorts concurrently, then ONE storyboard call for all of them (saves 2 LLM calls).
     with ThreadPoolExecutor(max_workers=3) as pool:
         secs = list(pool.map(_voice, enumerate(shorts)))
-    beats_all = storyboard(cfg, secs, None)
+    beats_all = storyboard(cfg, secs, None, real_people=bool(script.get("real_people")))
 
     results = []
     for sec, sh in zip(secs, shorts):
@@ -651,6 +651,16 @@ def _thumb_versus(cfg: dict, spec: dict, out: Path, photo: Path | None) -> Path:
     _thumb_chrome(cfg, d, img, spec.get("icon"))
     img.save(out, "JPEG", quality=90, optimize=True)
     return out
+
+
+def first_frame(video: Path, out: Path, at_s: float = 0.6) -> Path | None:
+    """One JPEG from `at_s` seconds in — used to audit each Short's cold open from the artifact. Never fatal."""
+    try:
+        _run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{at_s:.2f}", "-i", str(video), "-frames:v", "1", "-q:v", "4", str(out)])
+        return out
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] first frame failed: {str(e)[-120:]}")
+        return None
 
 
 def contact_sheet(video: Path, out: Path, every_s: float = 6.0, cols: int = 6, tile_w: int = 320) -> Path | None:

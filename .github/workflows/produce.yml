@@ -69,6 +69,7 @@ jobs:
             build/**/short.mp4
             build/**/thumbnail*.jpg
             build/**/contact_sheet.jpg
+            build/**/hook.jpg
             build/**/script.json
             build/**/description.txt
             build/**/captions.ass

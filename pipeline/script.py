@@ -41,13 +41,13 @@ SCHEMA = """{
     "hero": "THE number the viewer will search for, or the cost delta, <= 9 chars, e.g. '+$200K' | '7%' | '$1,348/mo'. Must appear in the title or be its direct consequence; NEVER a derived difference like '2%' when the title says 7%",
     "hero_label": "2-3 words MAX, all caps, readable on a TV across a room, e.g. 'MORE INTEREST' | 'PER MONTH'",
     "hero_is_cost": true,
-    "compare": {"left": {"label": "5% RATE", "value": "$373K"}, "right": {"label": "7% RATE", "value": "$558K"}},
+    "compare": {"left": {"label": "5% RATE", "value": "$373K"}, "right": {"label": "7% RATE", "value": "$558K"}, "_rule": "LEFT = the BETTER outcome for the viewer (shown green), RIGHT = the worse/costlier one (shown red)"},
     "icon": "one Lucide icon for the topic: home | car | piggy-bank | credit-card | briefcase | receipt | landmark | graduation-cap | heart-pulse | shopping-cart | chart-line | wallet",
     "query": "3-5 word stock-photo search for ONE PERSON with an expression matching the title's emotion, e.g. 'worried man glasses portrait' | 'shocked woman laptop' | 'serious businesswoman office'"
   },
   "description_hook": "1-2 sentences, <= 150 characters TOTAL, starting with the primary keyword phrase, written as a curiosity hook that extends the title (never 'In this video we...'). Numerals and symbols ($400,000, 7%), never spelled-out numbers.",
   "description_body": "2-3 short paragraphs, 120-200 words, plain prose: the problem, what the viewer will be able to do after watching, and the related terms a searcher would use (secondary keywords woven into sentences, NOT a list). Numerals only. No disclaimer, no subscribe line, no timestamps, no links, no hashtags.",
-  "key_facts": ["3-5 items of <= 8 words each with the video's concrete numbers, e.g. '$400,000 loan · 5% vs 7%', '+$200,000 lifetime interest'"],
+  "key_facts": ["3-5 items of <= 8 words, EACH containing a number from the video, e.g. '$400,000 loan · 5% vs 7%', '+$200,000 lifetime interest', '$10,000 → $45,000 in 10 years'"],
   "hashtags": ["3-5 specific CamelCase hashtags without generic ones like #viral, e.g. '#MortgageRates', '#Amortization', '#PersonalFinance'"],
   "tags": ["12-18 lowercase tags"],
   "sections": [
@@ -166,6 +166,7 @@ Return JSON exactly matching this schema:
         except Exception as e:  # noqa: BLE001 - keep the first draft
             print(f"[warn] second draft failed ({str(e)[:100]}); keeping the first")
     data["sources"] = [{"title": s.get("title", ""), "url": s.get("url", "")} for s in (pick.get("sources") or []) if s.get("url")]
+    data["real_people"] = pick.get("kind") == "story"   # grounded stories: no stock faces for real people (render/storyboard)
     return data
 
 
@@ -205,7 +206,10 @@ def _validate(d: dict, cfg: dict) -> None:
     if len(hook) > 160:  # keep the search snippet intact
         cut = hook[:157]
         hook = cut[: cut.rfind(" ")].rstrip(",;:") + "…"
-    facts = [str(x).strip(" -•·") for x in (d.get("key_facts") or []) if str(x).strip()][:5]
+    # key facts are for skimmers and search: keep only items that carry a number; slogans add nothing
+    facts = [str(x).strip(" -•·") for x in (d.get("key_facts") or []) if str(x).strip() and re.search(r"\d", str(x))][:5]
+    if len(facts) < 2:
+        facts = []
     tags_ = []
     for h in (d.get("hashtags") or []):
         h = "#" + re.sub(r"[^A-Za-z0-9]", "", str(h))
