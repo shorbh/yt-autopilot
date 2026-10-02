@@ -29,6 +29,10 @@ _quota_lock = threading.Lock()
 _quota: dict | None = None   # {"remaining": int, "ok": bool} cached per run
 
 
+class _ElevenDisabled(RuntimeError):
+    """ElevenLabs refused at the account level; don't retry this run."""
+
+
 def ffprobe_duration(path: Path) -> float:
     out = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", str(path)],
@@ -75,6 +79,9 @@ def _eleven_quota() -> dict:
             remaining = int(d.get("character_limit", 0)) - int(d.get("character_count", 0))
             _quota = {"remaining": max(0, remaining), "ok": True, "tier": d.get("tier", "?")}
             print(f"      ElevenLabs: {_quota['remaining']:,} characters left this month (tier: {_quota['tier']})")
+            if str(_quota["tier"]).lower() == "free":
+                # ElevenLabs blocks free-tier calls from datacenter IPs (GitHub Actions) with 401 detected_unusual_activity
+                print("      ElevenLabs free tier is refused from CI runners; a paid plan (Starter) is needed for the premium voice")
         except Exception as e:  # noqa: BLE001
             print(f"[warn] ElevenLabs subscription check failed ({str(e)[:100]}); using edge-tts")
             _quota = {"remaining": 0, "ok": False}
@@ -112,6 +119,13 @@ def _eleven_synth(cfg: dict, text: str, out_mp3: Path) -> list[dict]:
                            "speed": float(v.get("elevenlabs_speed", 1.05))},
     }
     r = requests.post(url, headers={"xi-api-key": key, "Content-Type": "application/json"}, json=body, timeout=180)
+    if r.status_code in (401, 402, 429):
+        # account-level refusals (free-tier datacenter block "detected_unusual_activity", quota_exceeded, bad key):
+        # disable ElevenLabs for the REST of the run so later videos go straight to edge-tts without retrying
+        with _quota_lock:
+            if _quota is not None:
+                _quota["ok"], _quota["remaining"] = False, 0
+        raise _ElevenDisabled(f"ElevenLabs {r.status_code}: {r.text[:160]}")
     if r.status_code != 200:
         raise RuntimeError(f"ElevenLabs {r.status_code}: {r.text[:200]}")
     d = r.json()
@@ -151,10 +165,13 @@ def synthesize(cfg: dict, text: str, out_mp3: Path, retries: int = 3, provider: 
                 if dur < 0.5:
                     raise RuntimeError("ElevenLabs produced empty audio")
                 return {"duration": dur, "words": words, "provider": "elevenlabs"}
+            except _ElevenDisabled as e:
+                last = e
+                break                      # account refused: no point retrying
             except Exception as e:  # noqa: BLE001
                 last = e
                 time.sleep(3)
-        print(f"[warn] ElevenLabs failed ({str(last)[:120]}); falling back to edge-tts for this section")
+        print(f"[warn] ElevenLabs failed ({str(last)[:140]}); falling back to edge-tts")
     for attempt in range(retries):
         try:
             words = asyncio.run(_synth(text, v["name"], v.get("rate", "+0%"), v.get("pitch", "+0Hz"), out_mp3))

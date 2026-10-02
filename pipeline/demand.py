@@ -94,7 +94,8 @@ def pick(cfg: dict, categories: list[str], covered: list[str], n: int = 3) -> di
             "Queries:\n" + "\n".join(f"- {q}" for q in queries) + f"\n\nReturn the top {n} as JSON exactly like:\n{SCHEMA}")
     try:
         data = ask_json(cfg, SYSTEM, user, temperature=0.3)
-        picks = [p for p in data.get("picks", []) if isinstance(p, dict) and p.get("query")][:n]
+        raw = data.get("picks", []) if isinstance(data, dict) else data   # some models return the bare list
+        picks = [p for p in (raw or []) if isinstance(p, dict) and p.get("query")][:n]
     except Exception as e:  # noqa: BLE001
         print(f"[demand] LLM ranking failed ({str(e)[:100]})")
         return None

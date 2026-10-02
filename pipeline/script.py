@@ -35,7 +35,7 @@ Retention rules (these decide whether the algorithm recommends the video):
 Return ONLY valid JSON matching the schema requested."""
 
 SCHEMA = """{
-  "title": "<= 60 chars. EITHER the exact question people type into YouTube (when a SEARCH QUERY is given, keep its words and order: 'How Much House Can You Afford on $80K?') OR a specific claim with a number ('A 7% Mortgage Costs $200,000 More'). Plain words a 25-year-old uses; no jargon terms as the subject ('Authorized User Piggybacking'), no 'Colon: Subtitle' constructions, no clickbait lies",
+  "title": "<= 60 chars. EITHER the exact question people type into YouTube (when a SEARCH QUERY is given, keep its words and order: 'How Much House Can You Afford on $80K?') OR a specific claim with a number ('A 7% Mortgage Costs $200,000 More'). Numbers ALWAYS as numerals/symbols (40%, $200,000 — never 'Forty Percent'). Plain words a 25-year-old uses; no jargon terms as the subject ('Authorized User Piggybacking'), no 'Colon: Subtitle' constructions, no clickbait lies",
   "alt_titles": ["2 alternative titles"],
   "thumbnail": {
     "hero": "THE number the viewer will search for, or the cost delta, <= 9 chars, e.g. '+$200K' | '7%' | '$1,348/mo'. Must appear in the title or be its direct consequence; NEVER a derived difference like '2%' when the title says 7%",
@@ -75,11 +75,16 @@ SCHEMA = """{
     "y_suffix": ""
   },
   "shorts": [
-    {"hook_title": "<= 7 words: the claim itself in numerals, shown full-screen in the first second ('Your card charges interest DAILY', '$500 a month = $452,000')", "hook_face": "3-4 word stock-photo search for ONE person whose expression matches the claim ('shocked woman phone', 'worried man bills')", "narration": "110-150 words (about 45-55 seconds). FIRST SENTENCE <= 12 words and IS the claim — a loss, a contradiction or a number; no greeting, no 'did you know'. Self-contained, ends with 'Full breakdown on the channel.'", "visual_query": "..."},
-    {"hook_title": "...", "hook_face": "...", "narration": "...", "visual_query": "..."},
-    {"hook_title": "...", "hook_face": "...", "narration": "...", "visual_query": "..."}
+    {"hook_title": "<= 7 words: the claim itself in numerals, shown full-screen in the first second ('Your card charges interest DAILY', '$500 a month = $452,000')", "hook_face": "3-4 word stock-photo search for ONE person whose expression matches the claim ('shocked woman phone', 'worried man bills')", "narration": "110-150 words (about 45-55 seconds). FIRST SENTENCE <= 12 words and IS the claim — a loss, a contradiction or a number; no greeting, no 'did you know'. Self-contained, ends with 'Full breakdown on the channel.'", "visual_query": "..."}{more_shorts}
   ]
 }"""
+
+
+def _schema(cfg: dict) -> str:
+    """SCHEMA with the sign-off filled in and exactly shorts.count entries shown (the model copies the example count)."""
+    n = int(cfg["shorts"]["count"])
+    more = "".join(',\n    {"hook_title": "...", "hook_face": "...", "narration": "...", "visual_query": "..."}' for _ in range(max(0, n - 1)))
+    return SCHEMA.replace("{signoff}", cfg["channel"]["signoff"]).replace("{more_shorts}", more)
 
 
 def target_minutes(cfg: dict) -> float:
@@ -143,9 +148,23 @@ itself (a loss, a contradiction or a number, <= 12 words) and 'hook_title' is th
 on frame one. No warm-up words.
 
 Return JSON exactly matching this schema:
-{SCHEMA.replace('{signoff}', ch['signoff'])}"""
+{_schema(cfg)}"""
     data = ask_json(cfg, SYSTEM, user)
     _validate(data, cfg)
+    # Length guard: models routinely undershoot (run #14: 776 words for an 8-minute target -> a 5-minute video).
+    # One corrective pass with the shortfall spelled out; keep whichever draft is closer to target.
+    wc = word_count(data)
+    if wc < 0.8 * target_words:
+        print(f"      script is {wc} words vs {target_words} target; asking for a fuller draft")
+        try:
+            data2 = ask_json(cfg, SYSTEM, user + f"\n\nYOUR PREVIOUS DRAFT HAD ONLY {wc} WORDS OF NARRATION. The total must be "
+                             f"about {target_words} words: deepen each section with a second example, a step-by-step of the "
+                             f"calculation, or the common objection and its answer. Same JSON shape.")
+            _validate(data2, cfg)
+            if abs(word_count(data2) - target_words) < abs(wc - target_words):
+                data = data2
+        except Exception as e:  # noqa: BLE001 - keep the first draft
+            print(f"[warn] second draft failed ({str(e)[:100]}); keeping the first")
     data["sources"] = [{"title": s.get("title", ""), "url": s.get("url", "")} for s in (pick.get("sources") or []) if s.get("url")]
     return data
 
