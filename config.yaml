@@ -18,7 +18,15 @@ channel:
   disclaimer: "This video is for education only and is not financial advice."
 
 voice:
-  # Run: python -m edge_tts --list-voices | findstr en-US
+  provider: "auto"           # auto = ElevenLabs when ELEVENLABS_API_KEY is set and credits cover the video, else edge
+  # --- ElevenLabs (premium; free tier 10k credits/month; Starter $5 = 30k; turbo model = 0.5 credit/char) ---
+  elevenlabs_voice_id: "nPczCjzI2devNBz1zQrb"   # "Brian" — deep, warm US narrator. Browse: elevenlabs.io/voice-library
+  elevenlabs_model: "eleven_turbo_v2_5"        # half the credit cost of multilingual_v2, quality is close
+  elevenlabs_stability: 0.45                   # lower = more expressive, higher = more monotone
+  elevenlabs_similarity: 0.8
+  elevenlabs_style: 0.2
+  elevenlabs_speed: 1.05
+  # --- edge-tts (free fallback) ---   Run: python -m edge_tts --list-voices | findstr en-US
   name: "en-US-AndrewMultilingualNeural"   # calm male; alt: en-US-AvaMultilingualNeural, en-GB-RyanNeural
   rate: "+4%"
   pitch: "+0Hz"
@@ -40,6 +48,37 @@ topics:
   trend_min_fit: 7           # 0-10 score from the LLM; below this the evergreen bank is used
   trend_max_per_days: 7      # at most ONE trend-sourced video per this many days; the other run(s) stay evergreen
   playlists: true            # add every long video to a playlist per category (created on first use)
+  # --- v4: demand-validated topics (YouTube autocomplete, free) run BEFORE the evergreen bank ---
+  demand: true
+  demand_seeds:              # autocomplete is queried for each; real questions people type become titles
+    - "how much house can i afford"
+    - "how much should i save"
+    - "how much do i need to retire"
+    - "is it worth it to"
+    - "why is rent so expensive"
+    - "why is everything so expensive"
+    - "how does venmo make money"
+    - "how do banks make money"
+    - "how does credit score work"
+    - "roth ira vs 401k"
+    - "pay off debt or invest"
+    - "how much car can i afford"
+    - "how much is a mortgage on"
+    - "what happens if you"
+    - "how do rich people"
+    - "why are groceries so expensive"
+    - "how does inflation"
+    - "how much does it cost to"
+    - "should i buy a house in 2026"
+    - "how to calculate"
+  # --- v4: money STORIES (broad, discovery) vs MECHANICS (narrow, deep). Share drifts with the weekly review. ---
+  story_share: 0.6
+  story_formats:
+    - "price story: why X costs what it costs — follow one dollar through the supply chain, with the numbers from the sources"
+    - "business story: how X actually makes its money — revenue lines, margins, who really pays; one calculation the viewer can repeat"
+    - "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers"
+    - "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why"
+    - "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example"
   trend_queries:             # Google News searches (last 7 days, US edition)
     - "mortgage rates"
     - "Fed interest rate decision"
@@ -52,7 +91,7 @@ topics:
     - "stock market"
 
 shorts:
-  count: 3
+  count: 4                   # 4 per run x 2 runs = 8 Shorts/week (Shorts are this channel's discovery surface)
   width: 1080
   height: 1920
   max_seconds: 58
@@ -61,7 +100,7 @@ publishing:
   # Two long videos a week (produce.yml cron: Mon + Thu 06:00 UTC); each run's 3 Shorts fill the days between.
   timezone: "America/New_York"
   long_publish_hour: 14      # 2 PM ET = strong US daytime + India evening
-  shorts_offset_days: [1, 2, 3]   # Mon run -> Tue/Wed/Thu Shorts; Thu run -> Fri/Sat/Sun
+  shorts_offset_days: [1, 2, 3, 4]   # Mon run -> Tue..Fri; Thu run -> Fri..Mon (two days get a second Short)
   shorts_publish_hour: 12
   privacy: "private"         # private + publishAt = scheduled. Use "public" to publish immediately.
   category_id: "27"          # 27 = Education

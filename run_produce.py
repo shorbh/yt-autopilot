@@ -46,7 +46,8 @@ def main() -> int:
 
     # forced topic skips the trend scan (saves an LLM call); otherwise trend scout first, evergreen bank second
     pick = pick_topic(cfg=cfg, forced=args.topic or None)
-    print(f"[1/5] Topic: {pick['topic']}  ({pick['category']} · {pick['format'].split(':')[0]} · {pick.get('source', 'bank')})")
+    print(f"[1/5] Topic: {pick['topic']}  ({pick['category']} · {pick['format'].split(':')[0]} · {pick.get('source', 'bank')} · "
+          f"{pick.get('kind', 'mechanic')}" + (f" · {len(pick.get('sources') or [])} sources" if pick.get('kind') == 'story' else "") + ")")
 
     prev = (watch_next(exclude_topic=pick["topic"], n=1) or [None])[0]   # most recent long video -> verbal bridge
     script = generate_script(cfg, pick, previous=prev)
@@ -84,7 +85,8 @@ def main() -> int:
     # record FIRST: state must know about the upload even if the playlist step blows up
     record_published({"kind": "long", "video_id": long_id, "title": script["title"], "topic": pick["topic"],
                       "category": pick["category"], "format": pick["format"], "duration": long["duration"],
-                      "source": pick.get("source", "bank"), "headline": pick.get("headline", "")})
+                      "source": pick.get("source", "bank"), "headline": pick.get("headline", ""),
+                      "query": pick.get("query", ""), "topic_kind": pick.get("kind", "mechanic")})
     print(f"[5/5] Uploaded long video: https://youtu.be/{long_id}")
     add_to_category_playlist(cfg, pick["category"], long_id)
 

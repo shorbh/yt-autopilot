@@ -539,6 +539,39 @@ def character(cfg, spec, w, h, out_dir, photo: Path | None = None, variant=0) ->
     return _save_frames(frames, out_dir)
 
 
+def hook_card(cfg, spec, w, h, out_dir, photo: Path | None, variant=0) -> tuple[Path, int]:
+    """Shorts cold open: a full-bleed face photo, darkened, with the claim in huge type punching in over the
+    first 0.4 s. No title bar, no count-up, nothing to read before the claim — the first frame IS the hook.
+    Falls back to the brand gradient when no photo is available."""
+    st = cfg["style"]
+    text = str(spec.get("text") or "")
+    if photo and Path(photo).exists():
+        base = ImageEnhance.Brightness(_cover(Image.open(photo).convert("RGB"), w, h)).enhance(0.55)
+        # extra darkening band behind the text so white type reads on any photo
+        band = Image.new("L", (w, h), 0)
+        bd = ImageDraw.Draw(band)
+        for y in range(int(h * 0.22), int(h * 0.7)):
+            bd.line([(0, y), (w, y)], fill=int(140 * (1 - abs((y - h * 0.46) / (h * 0.24)) ** 2)))
+        base = Image.composite(Image.new("RGB", (w, h), (11, 16, 32)), base, band)
+    else:
+        base = _base(cfg, w, h, variant=variant)
+    n = int(ANIM_FPS * 0.45)
+    frames = []
+    for i in range(n + 1):
+        t = _ease(i / n)
+        img = base.copy()
+        d = ImageDraw.Draw(img)
+        scale = 1.12 - 0.12 * t
+        size = int(min(w, h) * (0.115 if h > w else 0.1) * scale)
+        box = (w * 0.07, h * 0.26, w * 0.93, h * 0.66)
+        draw_fit(cfg, d, text.upper(), box, size, _mix((255, 255, 255), t, (40, 40, 50)), floor=int(size * 0.55),
+                 align="center", valign="middle", max_lines=4, stroke=max(4, size // 14))
+        bar_w = int(w * 0.18 * t)
+        d.rectangle([w / 2 - bar_w / 2, h * 0.685, w / 2 + bar_w / 2, h * 0.685 + 8], fill=hex_to_rgb(st["accent"]))
+        frames.append(img)
+    return _save_frames(frames, out_dir)
+
+
 def chart_progressive(cfg, chart: dict, w, h, out_dir) -> tuple[Path, int] | None:
     """Line chart that draws itself; bars grow. Renders partial data per frame with fixed axes."""
     from .visuals import chart_image

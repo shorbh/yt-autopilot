@@ -35,11 +35,11 @@ Retention rules (these decide whether the algorithm recommends the video):
 Return ONLY valid JSON matching the schema requested."""
 
 SCHEMA = """{
-  "title": "<= 60 chars, curiosity + specific number or contrast, no clickbait lies",
+  "title": "<= 60 chars. EITHER the exact question people type into YouTube (when a SEARCH QUERY is given, keep its words and order: 'How Much House Can You Afford on $80K?') OR a specific claim with a number ('A 7% Mortgage Costs $200,000 More'). Plain words a 25-year-old uses; no jargon terms as the subject ('Authorized User Piggybacking'), no 'Colon: Subtitle' constructions, no clickbait lies",
   "alt_titles": ["2 alternative titles"],
   "thumbnail": {
     "hero": "THE number the viewer will search for, or the cost delta, <= 9 chars, e.g. '+$200K' | '7%' | '$1,348/mo'. Must appear in the title or be its direct consequence; NEVER a derived difference like '2%' when the title says 7%",
-    "hero_label": "2-4 words, all caps, e.g. 'MORE INTEREST' | 'MORTGAGE RATES'",
+    "hero_label": "2-3 words MAX, all caps, readable on a TV across a room, e.g. 'MORE INTEREST' | 'PER MONTH'",
     "hero_is_cost": true,
     "compare": {"left": {"label": "5% RATE", "value": "$373K"}, "right": {"label": "7% RATE", "value": "$558K"}},
     "icon": "one Lucide icon for the topic: home | car | piggy-bank | credit-card | briefcase | receipt | landmark | graduation-cap | heart-pulse | shopping-cart | chart-line | wallet",
@@ -75,9 +75,9 @@ SCHEMA = """{
     "y_suffix": ""
   },
   "shorts": [
-    {"hook_title": "<= 40 chars on-screen title", "narration": "110-150 words (about 45-55 seconds), self-contained, ends with 'Full breakdown on the channel.'", "visual_query": "..."},
-    {"hook_title": "...", "narration": "...", "visual_query": "..."},
-    {"hook_title": "...", "narration": "...", "visual_query": "..."}
+    {"hook_title": "<= 7 words: the claim itself in numerals, shown full-screen in the first second ('Your card charges interest DAILY', '$500 a month = $452,000')", "hook_face": "3-4 word stock-photo search for ONE person whose expression matches the claim ('shocked woman phone', 'worried man bills')", "narration": "110-150 words (about 45-55 seconds). FIRST SENTENCE <= 12 words and IS the claim — a loss, a contradiction or a number; no greeting, no 'did you know'. Self-contained, ends with 'Full breakdown on the channel.'", "visual_query": "..."},
+    {"hook_title": "...", "hook_face": "...", "narration": "...", "visual_query": "..."},
+    {"hook_title": "...", "hook_face": "...", "narration": "...", "visual_query": "..."}
   ]
 }"""
 
@@ -103,6 +103,16 @@ def generate_script(cfg: dict, pick: dict, previous: dict | None = None) -> dict
     if pick.get("news_hook"):
         news_block = (f"\nNEWS HOOK (this week's event; use it in the hook and title so the video rides the search wave, "
                       f"but explain the underlying mechanism so the video stays useful for years): {pick['news_hook']}\n")
+    query_block = ""
+    if pick.get("query") and pick.get("source") == "demand":
+        query_block = (f"\nSEARCH QUERY (people type exactly this into YouTube; the title must keep these words in this order, "
+                       f"and the hook must speak them in the first two sentences): \"{pick['query']}\"\n")
+    kind_block = ""
+    if pick.get("kind") == "story":
+        kind_block = ("\nKIND: MONEY STORY. Tell it as a narrative about the subject (the company, product, price or event): "
+                      "what happened, the mechanism underneath, the numbers, and what it means for the viewer's own money. "
+                      "Still include one worked calculation the viewer can reproduce.\n")
+    source_block = pick.get("source_block") or ""
     prev_block = ""
     if previous and previous.get("title"):
         prev_block = (f"\nPREVIOUS VIDEO ON THE CHANNEL: \"{previous['title']}\" — in the 'close' section, INSTEAD of the generic "
@@ -115,10 +125,11 @@ Sign-off (must appear verbatim at the end of the 'close' section): {ch['signoff'
 
 TOPIC: {pick['topic']}
 CATEGORY: {pick['category']}
-FORMAT TO FOLLOW: {pick['format']}{news_block}{prev_block}
+FORMAT TO FOLLOW: {pick['format']}{query_block}{kind_block}{news_block}{prev_block}{source_block}
 
 Total narration length across all sections: about {target_words} words (±10%).
 Use 7 sections total: hook, s1..s5, close. Mark exactly 1-2 sections as short_worthy.
+Return exactly {cfg['shorts']['count']} Shorts in 'shorts'.
 The 'chart' must visualise the video's core worked example with 1-2 series and 4-12 points each; make the numbers consistent with the narration.
 Both chart series MUST be in the same unit and a similar magnitude (e.g. two dollar balances), never a price next to a total value — otherwise one line is flat.
 THUMBNAIL: 'hero' is the single number a scroller must see — the headline figure from the title or the cost it causes
@@ -126,12 +137,16 @@ THUMBNAIL: 'hero' is the single number a scroller must see — the headline figu
 'compare' is only for videos with two directly comparable figures in the same unit; otherwise set it to null.
 'hero_is_cost' is true when the hero is money lost / extra paid (shown in red), false when it is a gain or a rate (gold).
 'query' must describe a PERSON (face visible) whose expression matches the title's emotion — faces lift click-through.
-The three Shorts must each be a different angle on the topic (the number, the mistake, the rule) and must NOT repeat the long video's sentences.
+The Shorts must each be a different angle on the topic (the number, the mistake, the rule, the story) and must NOT repeat the long video's sentences.
+SHORTS COLD OPEN: 4 of 5 viewers swiped away in the first second on this channel. Every Short's first sentence is the claim
+itself (a loss, a contradiction or a number, <= 12 words) and 'hook_title' is that same claim in <= 7 words — it fills the screen
+on frame one. No warm-up words.
 
 Return JSON exactly matching this schema:
 {SCHEMA.replace('{signoff}', ch['signoff'])}"""
     data = ask_json(cfg, SYSTEM, user)
     _validate(data, cfg)
+    data["sources"] = [{"title": s.get("title", ""), "url": s.get("url", "")} for s in (pick.get("sources") or []) if s.get("url")]
     return data
 
 
@@ -181,7 +196,7 @@ def _validate(d: dict, cfg: dict) -> None:
     d["description"] = (hook + "\n\n" + body).strip()   # kept for anything that still reads the old field
     # thumbnail spec: normalise, and accept the pre-v3.2.1 flat keys (thumbnail_text / thumbnail_query) as a fallback
     th = d.get("thumbnail") if isinstance(d.get("thumbnail"), dict) else {}
-    hero = str(th.get("hero") or d.get("thumbnail_text") or d["title"]).strip()[:12]
+    hero = str(th.get("hero") or d.get("thumbnail_text") or d["title"]).strip()[:10]   # 10 chars fits the TV-size type
     cmp_ = th.get("compare") if isinstance(th.get("compare"), dict) else None
     if cmp_ and not all(isinstance(cmp_.get(s), dict) and cmp_[s].get("label") and cmp_[s].get("value") for s in ("left", "right")):
         cmp_ = None
@@ -193,7 +208,7 @@ def _validate(d: dict, cfg: dict) -> None:
     icon = th.get("icon")
     d["thumbnail"] = {
         "hero": hero,
-        "hero_label": str(th.get("hero_label") or "").strip()[:28].upper(),
+        "hero_label": " ".join(str(th.get("hero_label") or "").split()[:3]).strip()[:24].upper(),
         "hero_is_cost": bool(hic),
         "compare": cmp_ and {s: {"label": str(cmp_[s]["label"])[:14].upper(), "value": str(cmp_[s]["value"])[:10]} for s in ("left", "right")},
         "icon": icon if isinstance(icon, str) and icon in _THUMB_ICONS else None,
@@ -207,6 +222,9 @@ def _validate(d: dict, cfg: dict) -> None:
     d["title"] = d["title"][:100]
     d["tags"] = [t[:30] for t in d["tags"]][:25]
     d["shorts"] = d["shorts"][: cfg["shorts"]["count"]]
+    for sh in d["shorts"]:
+        sh["hook_title"] = " ".join(str(sh.get("hook_title") or d["title"]).split()[:8])[:48]
+        sh["hook_face"] = str(sh.get("hook_face") or "surprised person portrait")[:40]
     for s in d["sections"]:
         s.setdefault("stat", None)
         s.setdefault("short_worthy", False)

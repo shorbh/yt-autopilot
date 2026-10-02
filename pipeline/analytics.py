@@ -121,7 +121,7 @@ def adaptive_length(cfg: dict, ret: dict[str, dict], current: float | None) -> f
 def score_and_save(stats: dict[str, dict], cfg: dict | None = None) -> dict:
     from .state import load_performance
     pub = load_published()
-    by_cat, by_fmt = defaultdict(list), defaultdict(list)
+    by_cat, by_fmt, by_kind = defaultdict(list), defaultdict(list), defaultdict(list)
     scored = []
     for p in pub:
         st = stats.get(p.get("video_id", ""))
@@ -131,6 +131,7 @@ def score_and_save(stats: dict[str, dict], cfg: dict | None = None) -> dict:
         scored.append(s)
         by_cat[p["category"]].append(s)
         by_fmt[p["format"]].append(s)
+        by_kind[p.get("topic_kind") or "mechanic"].append(s)
     if not scored:
         return {}
     mean = sum(scored) / len(scored) or 1.0
@@ -140,6 +141,7 @@ def score_and_save(stats: dict[str, dict], cfg: dict | None = None) -> dict:
     perf = {
         "category_scores": {c: round((sum(v) / len(v)) / mean, 3) for c, v in by_cat.items()},
         "format_scores": {f: round((sum(v) / len(v)) / mean, 3) for f, v in by_fmt.items()},
+        "kind_scores": {k: round((sum(v) / len(v)) / mean, 3) for k, v in by_kind.items()},   # story vs mechanic
         "videos_scored": len(scored),
         "retention": ret,
         "script_hints": retention_hints(ret),
@@ -184,6 +186,8 @@ def weekly_report(cfg: dict, stats: dict, perf: dict, totals: dict, added: int) 
         lines += ["", "## What the audience rewards", ""]
         for c, v in sorted(perf["category_scores"].items(), key=lambda kv: -kv[1]):
             lines.append(f"- {c}: {v:.2f}x")
+        if perf.get("kind_scores"):
+            lines.append("- " + " · ".join(f"{k}: {v:.2f}x" for k, v in perf["kind_scores"].items()) + "  (story vs mechanic)")
         if perf.get("retention"):
             lines += ["", "## Retention (share of viewers still watching)", "", "| Video | at 5% (nose) | at 50% | at 90% (tail) |", "|---|---|---|---|"]
             titles = {p.get("video_id"): p["title"] for p in pub}

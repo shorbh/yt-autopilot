@@ -1,11 +1,32 @@
-"""Free neural TTS via Microsoft Edge (edge-tts). Returns audio + word timings for captions."""
+"""Text-to-speech with word timings for captions.
+
+Providers (voice.provider in config.yaml):
+  * elevenlabs — premium neural voice (ELEVENLABS_API_KEY). Uses the /with-timestamps endpoint so we get
+    character alignment -> word boundaries, same contract as edge-tts. Credits are checked BEFORE a video
+    starts so the whole video gets one voice; when the monthly quota can't cover it, the whole video uses
+    edge-tts. (Only if ElevenLabs errors mid-video after retries does a single section fall back to edge —
+    a voice change beats a failed run.)
+  * edge — free Microsoft Edge neural TTS (edge-tts). Always available; the fallback.
+  * auto — elevenlabs when a key exists and credits suffice, else edge.
+"""
+from __future__ import annotations
+
 import asyncio
+import base64
 import json
 import subprocess
+import threading
 import time
 from pathlib import Path
 
 import edge_tts
+import requests
+
+from .config import env
+
+_ELEVEN = "https://api.elevenlabs.io/v1"
+_quota_lock = threading.Lock()
+_quota: dict | None = None   # {"remaining": int, "ok": bool} cached per run
 
 
 def ffprobe_duration(path: Path) -> float:
@@ -35,17 +56,112 @@ async def _synth(text: str, voice: str, rate: str, pitch: str, out_mp3: Path) ->
     return words
 
 
-def synthesize(cfg: dict, text: str, out_mp3: Path, retries: int = 3) -> dict:
-    """Synthesize `text` to out_mp3. Returns {'duration': float, 'words': [...]}"""
+# ------------------------------------------------------------------ ElevenLabs
+
+def _eleven_quota() -> dict:
+    """Remaining characters this billing period (cached for the run). {'remaining': int, 'ok': bool}."""
+    global _quota
+    with _quota_lock:
+        if _quota is not None:
+            return _quota
+        key = env("ELEVENLABS_API_KEY")
+        if not key:
+            _quota = {"remaining": 0, "ok": False}
+            return _quota
+        try:
+            r = requests.get(f"{_ELEVEN}/user/subscription", headers={"xi-api-key": key}, timeout=20)
+            r.raise_for_status()
+            d = r.json()
+            remaining = int(d.get("character_limit", 0)) - int(d.get("character_count", 0))
+            _quota = {"remaining": max(0, remaining), "ok": True, "tier": d.get("tier", "?")}
+            print(f"      ElevenLabs: {_quota['remaining']:,} characters left this month (tier: {_quota['tier']})")
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] ElevenLabs subscription check failed ({str(e)[:100]}); using edge-tts")
+            _quota = {"remaining": 0, "ok": False}
+        return _quota
+
+
+def provider_for(cfg: dict, text_chars: int) -> str:
+    """Decide the voice for ONE video (all of its sections). Reserves the characters so a later video in the
+    same run sees the reduced balance. Returns 'elevenlabs' or 'edge'."""
+    want = str(cfg["voice"].get("provider", "auto")).lower()
+    if want == "edge":
+        return "edge"
+    q = _eleven_quota()
+    need = int(text_chars * 1.05) + 50
+    with _quota_lock:
+        if q["ok"] and q["remaining"] >= need:
+            q["remaining"] -= need
+            return "elevenlabs"
+    if want == "elevenlabs":
+        print(f"[warn] ElevenLabs requested but {q['remaining']:,} chars left < {need:,} needed; this video uses edge-tts")
+    return "edge"
+
+
+def _eleven_synth(cfg: dict, text: str, out_mp3: Path) -> list[dict]:
     v = cfg["voice"]
+    key = env("ELEVENLABS_API_KEY")
+    url = f"{_ELEVEN}/text-to-speech/{v.get('elevenlabs_voice_id')}/with-timestamps?output_format=mp3_44100_128"
+    body = {
+        "text": text,
+        "model_id": v.get("elevenlabs_model", "eleven_turbo_v2_5"),
+        "voice_settings": {"stability": float(v.get("elevenlabs_stability", 0.45)),
+                           "similarity_boost": float(v.get("elevenlabs_similarity", 0.8)),
+                           "style": float(v.get("elevenlabs_style", 0.2)),
+                           "use_speaker_boost": True,
+                           "speed": float(v.get("elevenlabs_speed", 1.05))},
+    }
+    r = requests.post(url, headers={"xi-api-key": key, "Content-Type": "application/json"}, json=body, timeout=180)
+    if r.status_code != 200:
+        raise RuntimeError(f"ElevenLabs {r.status_code}: {r.text[:200]}")
+    d = r.json()
+    out_mp3.write_bytes(base64.b64decode(d["audio_base64"]))
+    # character alignment -> word boundaries (split on whitespace), the same shape edge-tts gives us
+    al = d.get("alignment") or d.get("normalized_alignment") or {}
+    chars, starts, ends = al.get("characters", []), al.get("character_start_times_seconds", []), al.get("character_end_times_seconds", [])
+    words, cur, w_start, w_end = [], "", None, None
+    for ch, s, e in zip(chars, starts, ends):
+        if ch.isspace():
+            if cur:
+                words.append({"start": w_start, "end": w_end, "text": cur})
+            cur, w_start = "", None
+        else:
+            if w_start is None:
+                w_start = s
+            w_end = e
+            cur += ch
+    if cur:
+        words.append({"start": w_start, "end": w_end, "text": cur})
+    return words
+
+
+# ------------------------------------------------------------------ public API
+
+def synthesize(cfg: dict, text: str, out_mp3: Path, retries: int = 3, provider: str | None = None) -> dict:
+    """Synthesize `text` to out_mp3. Returns {'duration': float, 'words': [...], 'provider': str}.
+    `provider` should come from provider_for() so every section of a video uses the same voice."""
+    v = cfg["voice"]
+    provider = provider or provider_for(cfg, len(text))
     last = None
+    if provider == "elevenlabs":
+        for attempt in range(2):
+            try:
+                words = _eleven_synth(cfg, text, out_mp3)
+                dur = ffprobe_duration(out_mp3)
+                if dur < 0.5:
+                    raise RuntimeError("ElevenLabs produced empty audio")
+                return {"duration": dur, "words": words, "provider": "elevenlabs"}
+            except Exception as e:  # noqa: BLE001
+                last = e
+                time.sleep(3)
+        print(f"[warn] ElevenLabs failed ({str(last)[:120]}); falling back to edge-tts for this section")
     for attempt in range(retries):
         try:
             words = asyncio.run(_synth(text, v["name"], v.get("rate", "+0%"), v.get("pitch", "+0Hz"), out_mp3))
             dur = ffprobe_duration(out_mp3)
             if dur < 0.5:
                 raise RuntimeError("TTS produced empty audio")
-            return {"duration": dur, "words": words}
+            return {"duration": dur, "words": words, "provider": "edge"}
         except Exception as e:  # noqa: BLE001 - network flakiness; retry
             last = e
             time.sleep(3 * (attempt + 1))
@@ -53,16 +169,19 @@ def synthesize(cfg: dict, text: str, out_mp3: Path, retries: int = 3) -> dict:
 
 
 def synthesize_sections(cfg: dict, sections: list[dict], workdir: Path) -> list[dict]:
-    """One mp3 per section so we know exact per-section durations. Adds 'audio','duration','words'."""
+    """One mp3 per section so we know exact per-section durations. Adds 'audio','duration','words'.
+    The provider is chosen ONCE for the whole video so the voice never changes between sections."""
     from concurrent.futures import ThreadPoolExecutor
+    provider = provider_for(cfg, sum(len(s["narration"]) for s in sections))
+    print(f"      voice: {provider}")
 
     def _one(i_s):
         i, s = i_s
         mp3 = workdir / f"sec_{i:02d}.mp3"
-        info = synthesize(cfg, s["narration"], mp3)
+        info = synthesize(cfg, s["narration"], mp3, provider=provider)
         return {**s, "audio": str(mp3), "duration": info["duration"], "words": info["words"]}
 
-    # 3 concurrent requests: fast, but gentle enough not to trip Microsoft's rate limiting.
+    # 3 concurrent requests: fast, but gentle enough not to trip rate limiting on either provider.
     with ThreadPoolExecutor(max_workers=3) as pool:
         return list(pool.map(_one, enumerate(sections)))
 

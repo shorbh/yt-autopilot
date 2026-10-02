@@ -39,6 +39,9 @@ def long_description(cfg: dict, script: dict, stamps: list[str], topic: str | No
         parts.append("In this video: " + " · ".join(facts))
     if stamps:
         parts.append("Chapters:\n" + "\n".join(stamps))
+    srcs = [s for s in (script.get("sources") or []) if s.get("url")][:6]
+    if srcs:
+        parts.append("Sources:\n" + "\n".join(f"• {s.get('title') or s['url']}: {s['url']}" for s in srcs))
     nxt = watch_next(exclude_topic=topic)   # newest first = the video the narrator recommends in the close
     if nxt:
         parts.append("Watch next:\n" + "\n".join(f"▶ {p.get('title') or ch['name']}: https://youtu.be/{p['video_id']}" for p in nxt))
@@ -50,7 +53,11 @@ def long_description(cfg: dict, script: dict, stamps: list[str], topic: str | No
     parts = [p.strip() for p in parts if p and p.strip()]
     # YouTube's limit is 5,000 chars (upload.py cuts at 4,900). Never slice mid-URL: shorten the body first.
     while len("\n\n".join(parts)) > 4800 and len(parts) > 2:
-        longest = max(range(len(parts)), key=lambda i: len(parts[i]))
+        # shorten prose only — never the blocks that contain URLs or timestamps
+        longest = max(range(len(parts)),
+                      key=lambda i: 0 if parts[i].startswith(("Sources:", "Watch next:", "Chapters:", "Subscribe:")) or "http" in parts[i] else len(parts[i]))
+        if len(parts[longest]) < 300:
+            break
         parts[longest] = parts[longest][: max(200, len(parts[longest]) - 400)].rsplit(" ", 1)[0] + "…"
     return "\n\n".join(parts)
 

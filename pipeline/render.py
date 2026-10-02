@@ -19,7 +19,7 @@ from pathlib import Path
 from . import assets_remote, motion, visuals
 from .config import ROOT, hex_to_rgb
 from .storyboard import _key_phrase, storyboard
-from .tts import concat_audio, ffprobe_duration, synthesize, synthesize_sections
+from .tts import concat_audio, ffprobe_duration, provider_for, synthesize, synthesize_sections
 
 GAP = 0.35            # silence between sections (audio) — mirrored in video timing
 CHAPTER_SECS = 1.3    # chapter title card length (audio is delayed by the same amount)
@@ -89,6 +89,7 @@ def _align_beats(section: dict, beats: list[dict]) -> list[dict]:
     if len(merged) > 1 and merged[0]["dur"] < MIN_BEAT:  # first one too short: fold forward
         merged[1]["start"] = merged[0]["start"]
         merged[1]["dur"] += merged[0]["dur"]
+        merged[1]["visual"] = merged[0]["visual"]   # the opening visual (e.g. a Shorts hook card) must survive the fold
         merged.pop(0)
     return merged
 
@@ -108,10 +109,12 @@ def _nframes(dur: float, fps: int) -> int:
     return max(1, int(round(dur * fps)))
 
 
-def _clip_from_frames(frames_dir: Path, n: int, dur: float, w: int, h: int, fps: int, overlay: Path | None, out: Path) -> None:
+def _clip_from_frames(frames_dir: Path, n: int, dur: float, w: int, h: int, fps: int, overlay: Path | None, out: Path,
+                      fade: bool = True) -> None:
     anim = n / motion.ANIM_FPS
     hold = max(0.0, dur - anim + 0.5)
-    vf = f"[0:v]fps={fps},tpad=stop_mode=clone:stop_duration={hold:.3f},setsar=1,fade=t=in:d={FADE}:color={FADE_COLOR}[bg]"
+    fade_f = f",fade=t=in:d={FADE}:color={FADE_COLOR}" if fade else ""
+    vf = f"[0:v]fps={fps},tpad=stop_mode=clone:stop_duration={hold:.3f},setsar=1{fade_f}[bg]"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(motion.ANIM_FPS), "-i", str(frames_dir / "%04d.png")]
     if overlay:
         cmd += ["-i", str(overlay)]
@@ -245,6 +248,11 @@ def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdi
             photo = broll.person(vis.get("character")) if cfg["video"].get("b_roll", "auto") != "off" else None
             fd, n = motion.character(cfg, vis, w, h, fdir, photo=photo, variant=idx)
             _clip_from_frames(fd, n, beat["dur"], w, h, fps, overlay, out)
+            return out
+        if vtype == "hook":   # Shorts cold open: face photo + claim, no title overlay
+            photo = broll.photo(vis.get("query", "surprised person portrait")) if cfg["video"].get("b_roll", "auto") != "off" else None
+            fd, n = motion.hook_card(cfg, vis, w, h, fdir, photo=photo, variant=idx)
+            _clip_from_frames(fd, n, beat["dur"], w, h, fps, None, out, fade=False)   # frame one must be readable
             return out
         if vtype in motion.RENDERERS:
             fd, n = motion.RENDERERS[vtype](cfg, vis, w, h, fdir, variant=idx)
@@ -484,10 +492,13 @@ def build_shorts(cfg: dict, script: dict, workdir: Path) -> list[dict]:
         wd = workdir / f"short_{k}"
         wd.mkdir(parents=True, exist_ok=True)
         mp3 = wd / "sec_00.mp3"
-        info = synthesize(cfg, sh["narration"], mp3)
-        if info["duration"] > max_s - 1:  # too long -> speak faster once
-            fast = {**cfg, "voice": {**cfg["voice"], "rate": "+14%"}}
-            info = synthesize(fast, sh["narration"], mp3)
+        prov = provider_for(cfg, len(sh["narration"]))
+        info = synthesize(cfg, sh["narration"], mp3, provider=prov)
+        if info["duration"] > max_s - 1:  # too long -> speak faster once (same provider, so the voice is consistent)
+            fast = {**cfg, "voice": {**cfg["voice"], "rate": "+14%", "elevenlabs_speed": 1.18}}
+            if prov == "elevenlabs":
+                provider_for(cfg, len(sh["narration"]))   # debit the second pass from the credit reservation
+            info = synthesize(fast, sh["narration"], mp3, provider=prov)
         return {"id": f"short_{k}", "heading": sh.get("hook_title", ""), "narration": sh["narration"],
                 "audio": str(mp3), "duration": info["duration"], "words": info["words"], "_wd": wd}
 
@@ -499,8 +510,12 @@ def build_shorts(cfg: dict, script: dict, workdir: Path) -> list[dict]:
     results = []
     for sec, sh in zip(secs, shorts):
         wd = sec.pop("_wd")
+        beats = beats_all.get(sec["id"], [])
+        if beats:  # cold open: the first beat is always the claim over a face, whatever the storyboard chose
+            beats[0]["visual"] = {"type": "hook", "text": sh.get("hook_title") or sec["heading"],
+                                  "query": sh.get("hook_face") or "surprised person portrait"}
         out, _ = _assemble(cfg, [sec], w, h, wd, wd / "short.mp4", portrait=True, chart=None, chapters=False,
-                           beats_by_id={sec["id"]: beats_all.get(sec["id"], [])})
+                           beats_by_id={sec["id"]: beats})
         results.append({"path": str(out), "duration": ffprobe_duration(out), "title": sh.get("hook_title", script["title"])[:90]})
     return results
 
@@ -596,16 +611,18 @@ def _thumb_hero(cfg: dict, spec: dict, out: Path, photo: Path | None, title_text
             d.text((56, y + i * lh), line, font=fnt, fill=hex_to_rgb(st["accent2"]) if i == 0 else (255, 255, 255),
                    stroke_width=max(5, fnt.size // 18), stroke_fill=(0, 0, 0))
     else:
+        # TV-first sizing: 55% of this channel's watch time is on TV screens, where a 1280x720 thumbnail is drawn
+        # ~300 px wide — the hero must be legible at that size, so it fills the left half and the label is one line.
         hero = spec["hero"]
         col = _RED if spec["hero_is_cost"] else hex_to_rgb(st["accent2"])
-        hf = motion._fit_font(cfg, d, hero, box_w, 250, floor=110)
+        hf = motion._fit_font(cfg, d, hero, box_w, 310, floor=130)
         label = spec["hero_label"]
-        total = hf.size * 1.05 + (74 if label else 0)
-        y0 = max(50, _TH * 0.46 - total / 2)   # centred slightly above the middle; the icon badge lives bottom-left
-        d.text((56, y0), hero, font=hf, fill=col, stroke_width=max(8, hf.size // 16), stroke_fill=(0, 0, 0))
+        total = hf.size * 1.05 + (96 if label else 0)
+        y0 = max(40, _TH * 0.45 - total / 2)   # centred slightly above the middle; the icon badge lives bottom-left
+        d.text((56, y0), hero, font=hf, fill=col, stroke_width=max(10, hf.size // 14), stroke_fill=(0, 0, 0))
         if label:
-            motion.draw_fit(cfg, d, label, (60, y0 + hf.size * 1.12, 60 + box_w, y0 + hf.size * 1.12 + 80), 64,
-                            (255, 255, 255), floor=40, max_lines=1, stroke=5)
+            motion.draw_fit(cfg, d, label, (60, y0 + hf.size * 1.1, 60 + box_w, y0 + hf.size * 1.1 + 100), 84,
+                            (255, 255, 255), floor=52, max_lines=1, stroke=7)
     _thumb_chrome(cfg, d, img, spec.get("icon"))
     img.save(out, "JPEG", quality=90, optimize=True)
     return out
