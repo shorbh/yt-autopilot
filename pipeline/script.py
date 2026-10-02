@@ -35,7 +35,7 @@ Retention rules (these decide whether the algorithm recommends the video):
 Return ONLY valid JSON matching the schema requested."""
 
 SCHEMA = """{
-  "title": "<= 60 chars. EITHER the exact question people type into YouTube (when a SEARCH QUERY is given, keep its words and order: 'How Much House Can You Afford on $80K?') OR a specific claim with a number ('A 7% Mortgage Costs $200,000 More'). Numbers ALWAYS as numerals/symbols (40%, $200,000 — never 'Forty Percent'). Plain words a 25-year-old uses; no jargon terms as the subject ('Authorized User Piggybacking'), no 'Colon: Subtitle' constructions, no clickbait lies",
+  "title": "<= 60 chars, Headline Case with punctuation. EITHER the question people type into YouTube (when a SEARCH QUERY is given, keep its words and order but write it as a headline: 'How Much House Can I Afford With a $75K Salary?') OR a specific claim with a number ('A 7% Mortgage Costs $200,000 More'). Numbers ALWAYS as numerals/symbols (40%, $200,000 — never 'Forty Percent'). Plain words a 25-year-old uses; no jargon terms as the subject ('Authorized User Piggybacking'), no 'Colon: Subtitle' constructions, no clickbait lies",
   "alt_titles": ["2 alternative titles"],
   "thumbnail": {
     "hero": "THE number the viewer will search for, or the cost delta, <= 9 chars, e.g. '+$200K' | '7%' | '$1,348/mo'. Must appear in the title or be its direct consequence; NEVER a derived difference like '2%' when the title says 7%",
@@ -191,10 +191,41 @@ def _clean_prose(text: str) -> str:
     return text.strip()
 
 
+_SMALL = {"a", "an", "the", "and", "or", "of", "on", "in", "at", "to", "for", "with", "vs", "by", "from", "per"}
+_QWORDS = ("how", "why", "what", "when", "should", "is", "can", "do", "does", "which", "are", "will")
+
+
+def headline(title: str) -> str:
+    """Search-query titles arrive as the raw lowercase query ('how much house can i afford with 75k salary').
+    Make it a headline: Title Case (small words lower), 'i' -> 'I', 75k -> $75K, '?' on questions."""
+    t = " ".join(str(title).split())
+    if not t:
+        return t
+    t = re.sub(r"\b(\d{2,3})k\b", r"$\1K", t, flags=re.I)                 # 75k -> $75K
+    t = re.sub(r"\$\$", "$", t)
+    words = t.split()
+    out = []
+    for i, w in enumerate(words):
+        lw = w.lower()
+        if lw == "i":
+            out.append("I")
+        elif i not in (0, len(words) - 1) and lw in _SMALL:
+            out.append(lw)
+        elif w.isupper() and len(w) > 1 and not w[0].isdigit():            # keep acronyms (IRA, ETF, HSA)
+            out.append(w)
+        else:
+            out.append(w[:1].upper() + w[1:])
+    t = " ".join(out)
+    if t.split()[0].lower() in _QWORDS and not t.rstrip().endswith(("?", "!", ".")):
+        t += "?"
+    return t[:100]
+
+
 def _validate(d: dict, cfg: dict) -> None:
     for k in ("title", "tags", "sections", "shorts"):
         if k not in d:
             raise ValueError(f"Script missing key: {k}")
+    d["title"] = headline(d["title"])
     # description parts (v3.2.1). Older single-field replies are split: first sentence -> hook, rest -> body.
     hook = _clean_prose(d.get("description_hook") or "")
     body = _clean_prose(d.get("description_body") or "")
@@ -242,7 +273,6 @@ def _validate(d: dict, cfg: dict) -> None:
     d.setdefault("thumbnail_text", hero)   # older code paths / selftest still read this
     if len(d["sections"]) < 4:
         raise ValueError("Script has too few sections")
-    d["title"] = d["title"][:100]
     d["tags"] = [t[:30] for t in d["tags"]][:25]
     d["shorts"] = d["shorts"][: cfg["shorts"]["count"]]
     for sh in d["shorts"]:

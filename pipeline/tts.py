@@ -83,8 +83,11 @@ def _eleven_quota() -> dict:
                 # ElevenLabs blocks free-tier calls from datacenter IPs (GitHub Actions) with 401 detected_unusual_activity
                 print("      ElevenLabs free tier is refused from CI runners; a paid plan (Starter) is needed for the premium voice")
         except Exception as e:  # noqa: BLE001
-            print(f"[warn] ElevenLabs subscription check failed ({str(e)[:100]}); using edge-tts")
-            _quota = {"remaining": 0, "ok": False}
+            # New ElevenLabs keys carry permission scopes; a key without "User -> Read" gets 401 here even though
+            # text-to-speech would work. Don't give up: treat the balance as unknown and let the first TTS call decide.
+            print(f"[warn] ElevenLabs balance check failed ({str(e)[:90]}). If this is 401, the API key lacks the "
+                  f"'User: read' permission — regenerate it with Text-to-Speech + User(read). Trying TTS anyway.")
+            _quota = {"remaining": 10 ** 9, "ok": True, "tier": "unknown", "unverified": True}
         return _quota
 
 
@@ -157,6 +160,9 @@ def synthesize(cfg: dict, text: str, out_mp3: Path, retries: int = 3, provider: 
     v = cfg["voice"]
     provider = provider or provider_for(cfg, len(text))
     last = None
+    with _quota_lock:   # account refused earlier in this run -> don't even try
+        if provider == "elevenlabs" and _quota is not None and not _quota["ok"]:
+            provider = "edge"
     if provider == "elevenlabs":
         for attempt in range(2):
             try:
