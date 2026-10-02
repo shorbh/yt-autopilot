@@ -11,6 +11,25 @@ for p in (DATA, BUILD, ASSETS / "fonts"):
     p.mkdir(parents=True, exist_ok=True)
 
 
+def _load_dotenv() -> None:
+    """Local runs: read KEY=value lines from ROOT/.env into the environment (GitHub Actions uses secrets instead).
+    Never overrides variables that are already set; .env is git-ignored."""
+    p = ROOT / ".env"
+    if not p.exists():
+        return
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k, v = k.strip(), v.strip().strip('"').strip("'")
+        if k and k not in os.environ:
+            os.environ[k] = v
+
+
+_load_dotenv()
+
+
 def load_config() -> dict:
     with open(ROOT / "config.yaml", "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
