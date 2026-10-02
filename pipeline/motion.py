@@ -600,7 +600,7 @@ def chart_progressive(cfg, chart: dict, w, h, out_dir) -> tuple[Path, int] | Non
 
 def chapter_card(cfg, heading: str, index: int, w, h, out_dir) -> tuple[Path, int]:
     st = cfg["style"]
-    n = int(ANIM_FPS * 1.0)
+    n = int(ANIM_FPS * 0.5)   # the card is on screen for render.CHAPTER_SECS (0.6 s); animation must finish inside that
     frames = []
     for i in range(n + 1):
         t = _ease(i / n)

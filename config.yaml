@@ -45,7 +45,10 @@ video:
   max_minutes: 12            #   [min_minutes, max_minutes]. Watch hours = views x minutes watched, so length is earned.
   captions: true
   b_roll: "auto"             # auto = Pexels if PEXELS_API_KEY set, else generated slides
-  music: false               # keep false unless you add royalty-free tracks to assets/music/
+  music: true                # music bed from assets/music/*.mp3 (YouTube Audio Library: Ambient/Cinematic, Calm, no attribution);
+  music_level: 0.10          #   silently skipped when the folder is empty. Ducks ~12 dB under speech (sidechain).
+  sfx: true                  # synthesised sound design: whoosh on section change, tick when a number lands, riser into reveals
+  sfx_level: 0.18
   outro: true                # 6 s end screen (subscribe CTA) after the close section
 
 topics:

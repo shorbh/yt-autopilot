@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -20,7 +21,7 @@ from pathlib import Path
 from pipeline.config import BUILD, load_config
 from pipeline.describe import long_description, short_description, watch_next
 from pipeline.render import build_long_video, build_shorts, contact_sheet, first_frame, thumbnail
-from pipeline.script import generate_script, target_minutes, word_count
+from pipeline.script import annotate_delivery, generate_script, target_minutes, word_count
 from pipeline.state import record_published
 from pipeline.topics import pick_topic
 
@@ -39,6 +40,10 @@ def main() -> int:
 
     cfg = load_config()
     t0 = time.time()
+    forced_voice = (os.environ.get("VOICE_PROVIDER") or "").strip().lower()
+    if forced_voice and forced_voice != "auto":   # workflow_dispatch "voice" input: compare providers on the same topic
+        cfg["voice"]["provider"] = forced_voice
+        print(f"      voice provider forced to '{forced_voice}' for this run")
 
     if not args.dry_run:  # fail in 2 s, not after a 6-minute render, when the token is dead
         from pipeline.upload import preflight
@@ -53,6 +58,8 @@ def main() -> int:
     script = generate_script(cfg, pick, previous=prev)
     print(f"[2/5] Script: '{script['title']}'  ~{word_count(script)} words, target {target_minutes(cfg):.0f} min"
           + (f", bridges to '{prev['title'][:40]}'" if prev else "") + f"  ({time.time()-t0:.0f}s)")
+    if os.environ.get("FISH_API_KEY") and cfg["voice"].get("provider", "auto") in ("auto", "fish"):
+        annotate_delivery(cfg, script)   # Fish-only [bracket] cues; captions and cards keep using the clean narration
 
     workdir = BUILD / f"{datetime.now():%Y%m%d}-{slugify(script['title'])}"
     workdir.mkdir(parents=True, exist_ok=True)

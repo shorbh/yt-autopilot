@@ -32,6 +32,12 @@ Retention rules (these decide whether the algorithm recommends the video):
   bad: anything mentioning mortgages, taxes, the Fed, a company, a percentage or a dollar figure.
   Write a FRESH line in your own words every time — never reuse the example sentences above.
 - Any named person keeps the same name, gender and pronouns throughout; state gender implicitly via pronouns.
+
+Write for the EAR, not the page (a synthetic voice reads this; the words must carry the feeling):
+- Vary sentence length on purpose: after a long sentence, a short one. Four words. Then build again.
+- Talk to "you". One rhetorical question per section, answered immediately. One dry aside per video, never more.
+- Put the surprising number at the END of its sentence, where the voice lands on it.
+- Concrete over abstract: "$514 more every month" beats "a significantly higher payment".
 Return ONLY valid JSON matching the schema requested."""
 
 SCHEMA = """{
@@ -287,6 +293,64 @@ def _validate(d: dict, cfg: dict) -> None:
         s.setdefault("short_worthy", False)
         s.setdefault("visual_query", "finance")
     d.setdefault("chart", None)
+
+
+# ------------------------------------------------------------------ delivery cues (Fish Audio S2 bracket syntax)
+
+_CUE_RE = re.compile(r"\[[^\]]{1,40}\]|\((?:break|long-break|breath)\)")
+
+DELIVERY_SYSTEM = """You are a voice director marking up a finance explainer for the Fish Audio S2 text-to-speech model.
+You add DELIVERY CUES in square brackets to the narration. The cues shape how a line is spoken; the words never change.
+Syntax (S2): a sentence-level cue goes at the START of a sentence and colours that sentence: [curious] [confident] [surprised]
+[worried] [calm] [soft tone] [slightly amused] [determined] [in a hurry tone] — natural-language phrases are allowed.
+[emphasis] goes IMMEDIATELY BEFORE the word or number to stress. [break] is a short pause, [long-break] a longer one; they
+go between sentences or right before a reveal.
+Rules — a flat read is the enemy, but so is a caricature:
+- At most ONE sentence-level cue per sentence, and only on 1 sentence in 3 or 4; let the others ride on the previous mood.
+- Every section opens with a sentence-level cue (set the mood), then at most 2 more in that section.
+- [emphasis] on the single most important number or word in each section — never more than 2 per section.
+- A [break] before each reveal or punchline (the sentence that delivers the surprising number), roughly once per section.
+- Never use laughing/sighing/crying/shouting/whispering/screaming effects. No [narrator]. No cues inside a number.
+- Do NOT alter, reorder, add or remove any word or punctuation. Output must equal the input once cues are stripped.
+Return ONLY JSON: {"sections": [{"id": "...", "spoken": "..."}], "shorts": [{"index": 0, "spoken": "..."}]}"""
+
+
+def _clean(text: str) -> str:
+    return " ".join(_CUE_RE.sub(" ", str(text)).split())
+
+
+def annotate_delivery(cfg: dict, script: dict) -> int:
+    """One LLM call: add Fish delivery cues to every section and Short. Writes `spoken` next to `narration`.
+    A section is accepted only if stripping the cues gives back the original narration exactly — so captions,
+    beat alignment and on-screen text (which all use `narration`) can never drift. Returns how many were accepted."""
+    secs = script.get("sections", [])
+    shorts = script.get("shorts", [])
+    user = ("Mark up these narrations.\n\nSECTIONS:\n" +
+            "\n\n".join(f"[id={s['id']}]\n{s['narration']}" for s in secs) +
+            "\n\nSHORTS:\n" + "\n\n".join(f"[index={i}]\n{sh['narration']}" for i, sh in enumerate(shorts)))
+    try:
+        data = ask_json(cfg, DELIVERY_SYSTEM, user, temperature=0.4)
+    except Exception as e:  # noqa: BLE001 - cues are a bonus
+        print(f"[warn] delivery pass failed ({str(e)[:100]}); narration will be read without cues")
+        return 0
+    accepted = 0
+    by_id = {str(x.get("id")): str(x.get("spoken") or "") for x in data.get("sections", []) if isinstance(x, dict)}
+    for s in secs:
+        sp = by_id.get(str(s["id"]), "")
+        if sp and _clean(sp) == " ".join(s["narration"].split()) and _CUE_RE.search(sp):
+            s["spoken"] = " ".join(sp.split())
+            accepted += 1
+    by_ix = {int(x.get("index", -1)): str(x.get("spoken") or "") for x in data.get("shorts", []) if isinstance(x, dict)}
+    for i, sh in enumerate(shorts):
+        sp = by_ix.get(i, "")
+        if sp and _clean(sp) == " ".join(sh["narration"].split()) and _CUE_RE.search(sp):
+            sh["spoken"] = " ".join(sp.split())
+            accepted += 1
+    total = len(secs) + len(shorts)
+    cues = sum(len(_CUE_RE.findall(x.get("spoken", ""))) for x in secs + shorts)
+    print(f"      delivery cues: {accepted}/{total} parts annotated, {cues} cues" +
+          ("" if accepted == total else " (rejected parts had altered words; they will be read plain)"))
+    return accepted
 
 
 def word_count(script: dict) -> int:

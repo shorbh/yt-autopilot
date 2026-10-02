@@ -13,6 +13,11 @@ on:
       topic:
         description: "Force a topic (optional)"
         required: false
+      voice:
+        description: "Voice provider for this run (auto = config order)"
+        type: choice
+        default: auto
+        options: [auto, fish, elevenlabs, edge]
 
 permissions:
   contents: write
@@ -54,6 +59,7 @@ jobs:
           # On the schedule trigger `inputs` is empty, so these are "" and both branches below are skipped.
           DRY_RUN: ${{ inputs.dry_run }}
           FORCE_TOPIC: ${{ inputs.topic }}
+          VOICE_PROVIDER: ${{ inputs.voice }}   # "" or "auto" on the schedule -> config decides
         run: |
           ARGS=()
           if [ "$DRY_RUN" = "true" ]; then ARGS+=(--dry-run --keep-build); fi

@@ -241,6 +241,14 @@ def _eleven_synth(cfg: dict, text: str, out_mp3: Path) -> list[dict]:
 
 # ------------------------------------------------------------------ public API
 
+def spoken_text(part: dict, provider: str) -> str:
+    """What the voice reads: the cue-annotated `spoken` text for Fish (S2 understands [bracket] cues); the clean
+    narration for everyone else — edge/ElevenLabs would read the brackets aloud."""
+    if provider == "fish" and part.get("spoken"):
+        return part["spoken"]
+    return _TAG_RE.sub(" ", part["narration"]).strip()
+
+
 def synthesize(cfg: dict, text: str, out_mp3: Path, retries: int = 3, provider: str | None = None) -> dict:
     """Synthesize `text` to out_mp3. Returns {'duration': float, 'words': [...], 'provider': str}.
     `provider` should come from provider_for() so every section of a video uses the same voice."""
@@ -267,6 +275,7 @@ def synthesize(cfg: dict, text: str, out_mp3: Path, retries: int = 3, provider: 
                 time.sleep(3)
         print(f"[warn] Fish Audio failed ({str(last)[:140]}); falling back to edge-tts")
         provider = "edge"
+    text = _TAG_RE.sub(" ", text).strip() if provider != "fish" else text   # cues are Fish-only
     if provider == "elevenlabs":
         for attempt in range(2):
             try:
@@ -300,12 +309,12 @@ def synthesize_sections(cfg: dict, sections: list[dict], workdir: Path) -> list[
     The provider is chosen ONCE for the whole video so the voice never changes between sections."""
     from concurrent.futures import ThreadPoolExecutor
     provider = provider_for(cfg, sum(len(s["narration"]) for s in sections))
-    print(f"      voice: {provider}")
+    print(f"      voice: {provider}" + (" (with delivery cues)" if provider == "fish" and any(s.get("spoken") for s in sections) else ""))
 
     def _one(i_s):
         i, s = i_s
         mp3 = workdir / f"sec_{i:02d}.mp3"
-        info = synthesize(cfg, s["narration"], mp3, provider=provider)
+        info = synthesize(cfg, spoken_text(s, provider), mp3, provider=provider)
         return {**s, "audio": str(mp3), "duration": info["duration"], "words": info["words"]}
 
     # 3 concurrent requests: fast, but gentle enough not to trip rate limiting on either provider.

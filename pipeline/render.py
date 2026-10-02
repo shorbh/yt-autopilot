@@ -19,10 +19,10 @@ from pathlib import Path
 from . import assets_remote, motion, visuals
 from .config import ROOT, hex_to_rgb
 from .storyboard import _key_phrase, storyboard
-from .tts import _eleven_available, concat_audio, ffprobe_duration, provider_for, synthesize, synthesize_sections
+from .tts import _eleven_available, concat_audio, ffprobe_duration, provider_for, spoken_text, synthesize, synthesize_sections
 
 GAP = 0.35            # silence between sections (audio) — mirrored in video timing
-CHAPTER_SECS = 1.3    # chapter title card length (audio is delayed by the same amount)
+CHAPTER_SECS = 0.6    # chapter title card length (audio is delayed by the same amount); v5: felt, not waited through
 OUTRO_SECS = 6.0      # end screen (subscribe CTA); audio is padded with silence to match
 FADE = 0.25           # fade-in on every cut
 MIN_BEAT = 1.4        # beats shorter than this are merged into the previous one
@@ -97,10 +97,25 @@ def _align_beats(section: dict, beats: list[dict]) -> list[dict]:
 # ------------------------------------------------------------------ clip builders
 
 FADE_COLOR = "0x0B1020"   # fade from the brand navy, not black: a black dip on a navy card read as a dropout
+DRIFT = 0.05              # continuous slow zoom over each card's life (5%): nothing on screen ever fully stops
 
 
-def _vf_common(w: int, h: int, fps: int) -> str:
-    return f"fps={fps},setsar=1,fade=t=in:d={FADE}:color={FADE_COLOR}"
+def _fade(fade: bool) -> str:
+    """Edit rhythm (v5): HARD CUTS between beats; a short fade only where `fade` is requested (section changes).
+    Fades everywhere read as slow — a cut lands on the first word."""
+    return f",fade=t=in:d={FADE}:color={FADE_COLOR}" if fade else ""
+
+
+def _drift(w: int, h: int, dur: float) -> str:
+    """Per-frame slow push-in via `scale` with eval=frame (far cheaper than zoompan on video), then centre-crop.
+    Even dimensions are forced so yuv420p stays happy."""
+    if dur <= 0.2:
+        return ""
+    k = f"(1+{DRIFT}*min(t/{dur:.3f}\\,1))"
+    # crop freezes in_w/in_h at config time, so its default centring would be (W-W)/2 = 0 -> a top-left-anchored
+    # zoom (content sliding toward the corner). Recompute the centre from the same t-formula instead.
+    return (f",scale=w='trunc(iw*{k}/2)*2':h='trunc(ih*{k}/2)*2':eval=frame,"
+            f"crop={w}:{h}:x='(trunc(in_w*{k}/2)*2-in_w)/2':y='(trunc(in_h*{k}/2)*2-in_h)/2',setsar=1")
 
 
 def _nframes(dur: float, fps: int) -> int:
@@ -110,11 +125,11 @@ def _nframes(dur: float, fps: int) -> int:
 
 
 def _clip_from_frames(frames_dir: Path, n: int, dur: float, w: int, h: int, fps: int, overlay: Path | None, out: Path,
-                      fade: bool = True) -> None:
+                      fade: bool = False, drift: bool = True) -> None:
     anim = n / motion.ANIM_FPS
     hold = max(0.0, dur - anim + 0.5)
-    fade_f = f",fade=t=in:d={FADE}:color={FADE_COLOR}" if fade else ""
-    vf = f"[0:v]fps={fps},tpad=stop_mode=clone:stop_duration={hold:.3f},setsar=1{fade_f}[bg]"
+    vf = (f"[0:v]fps={fps},tpad=stop_mode=clone:stop_duration={hold:.3f},setsar=1"
+          f"{_drift(w, h, dur) if drift else ''}{_fade(fade)}[bg]")
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(motion.ANIM_FPS), "-i", str(frames_dir / "%04d.png")]
     if overlay:
         cmd += ["-i", str(overlay)]
@@ -125,9 +140,9 @@ def _clip_from_frames(frames_dir: Path, n: int, dur: float, w: int, h: int, fps:
     _run(cmd)
 
 
-def _clip_from_video(src: Path, dur: float, w: int, h: int, fps: int, overlay: Path | None, out: Path) -> None:
+def _clip_from_video(src: Path, dur: float, w: int, h: int, fps: int, overlay: Path | None, out: Path, fade: bool = False) -> None:
     vf = (f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
-          f"eq=brightness=-0.12:saturation=0.9,{_vf_common(w, h, fps)}[bg]")
+          f"eq=brightness=-0.12:saturation=0.9,fps={fps},setsar=1{_fade(fade)}[bg]")
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", str(src)]
     if overlay:
         cmd += ["-i", str(overlay)]
@@ -138,11 +153,11 @@ def _clip_from_video(src: Path, dur: float, w: int, h: int, fps: int, overlay: P
     _run(cmd)
 
 
-def _clip_from_image(src: Path, dur: float, w: int, h: int, fps: int, overlay: Path | None, out: Path) -> None:
+def _clip_from_image(src: Path, dur: float, w: int, h: int, fps: int, overlay: Path | None, out: Path, fade: bool = False) -> None:
     frames = _nframes(dur, fps)
     zoom = f"zoompan=z='min(zoom+0.0006,1.14)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps={fps}"
     vf = (f"[0:v]scale={int(w * 1.3)}:{int(h * 1.3)}:force_original_aspect_ratio=increase,crop={int(w * 1.3)}:{int(h * 1.3)},"
-          f"{zoom},eq=brightness=-0.1,setsar=1,fade=t=in:d={FADE}:color={FADE_COLOR}[bg]")
+          f"{zoom},eq=brightness=-0.1,setsar=1{_fade(fade)}[bg]")
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src)]
     if overlay:
         cmd += ["-i", str(overlay)]
@@ -207,11 +222,12 @@ class _BrollCache:
 
 
 def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdir: Path,
-               overlay: Path | None, chart: dict | None, broll: _BrollCache, heading: str) -> Path:
+               overlay: Path | None, chart: dict | None, broll: _BrollCache, heading: str, fade: bool = False) -> Path:
     out = workdir / f"beat_{idx:03d}.mp4"
     vis = beat["visual"]
     vtype = vis.get("type")
     fdir = workdir / f"frames_{idx:03d}"
+    dur = beat["dur"]
 
     def _callout(text: str | None = None) -> dict:
         return {"type": "callout", "text": (text or beat["text"])[:90]}
@@ -222,17 +238,17 @@ def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdi
         if vtype == "chart" and chart:
             r = motion.chart_progressive(cfg, chart, w, h, fdir)
             if r:
-                _clip_from_frames(r[0], r[1], beat["dur"], w, h, fps, overlay, out)
+                _clip_from_frames(r[0], r[1], dur, w, h, fps, overlay, out, fade=fade, drift=False)   # axes must not drift
                 return out
             vtype, vis = "callout", _callout()
         if vtype == "broll" and cfg["video"].get("b_roll", "auto") != "off":
-            got = broll.get(vis.get("query", "finance desk"), beat["dur"])
+            got = broll.get(vis.get("query", "finance desk"), dur)
             if got:
                 kind, src = got
                 # footage always carries the sentence's key phrase (plus the section lower third)
                 phrase = str(vis.get("text") or _key_phrase(beat["text"]))
                 ov = visuals.broll_overlay(cfg, phrase, w, h, workdir / f"ov_{idx:03d}.png", overlay)
-                (_clip_from_video if kind == "video" else _clip_from_image)(src, beat["dur"], w, h, fps, ov, out)
+                (_clip_from_video if kind == "video" else _clip_from_image)(src, dur, w, h, fps, ov, out, fade=fade)
                 return out
             vtype, vis = "callout", _callout()
         elif vtype == "broll":
@@ -241,28 +257,28 @@ def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdi
             photo = broll.photo(vis.get("query", "finance desk")) if cfg["video"].get("b_roll", "auto") != "off" else None
             r = motion.photo_text(cfg, vis, w, h, fdir, photo, variant=idx)
             if r:
-                _clip_from_frames(r[0], r[1], beat["dur"], w, h, fps, overlay, out)
+                _clip_from_frames(r[0], r[1], dur, w, h, fps, overlay, out, fade=fade)
                 return out
             vtype, vis = "callout", _callout(vis.get("text"))
         if vtype == "character":
             photo = broll.person(vis.get("character")) if cfg["video"].get("b_roll", "auto") != "off" else None
             fd, n = motion.character(cfg, vis, w, h, fdir, photo=photo, variant=idx)
-            _clip_from_frames(fd, n, beat["dur"], w, h, fps, overlay, out)
+            _clip_from_frames(fd, n, dur, w, h, fps, overlay, out, fade=fade)
             return out
         if vtype == "hook":   # Shorts cold open: face photo + claim, no title overlay
             photo = broll.photo(vis.get("query", "surprised person portrait")) if cfg["video"].get("b_roll", "auto") != "off" else None
             fd, n = motion.hook_card(cfg, vis, w, h, fdir, photo=photo, variant=idx)
-            _clip_from_frames(fd, n, beat["dur"], w, h, fps, None, out, fade=False)   # frame one must be readable
+            _clip_from_frames(fd, n, dur, w, h, fps, None, out, fade=False)   # frame one must be readable
             return out
         if vtype in motion.RENDERERS:
             fd, n = motion.RENDERERS[vtype](cfg, vis, w, h, fdir, variant=idx)
-            _clip_from_frames(fd, n, beat["dur"], w, h, fps, overlay, out)
+            _clip_from_frames(fd, n, dur, w, h, fps, overlay, out, fade=fade)
             return out
     except Exception as e:  # noqa: BLE001 - a single bad beat must not kill the video
         print(f"[warn] beat {idx} ({vtype}) failed: {str(e)[-300:]} — using slide")
 
     slide = visuals.slide(cfg, heading, w, h, workdir / f"slide_{idx:03d}.png", subtitle=beat["text"][:80])
-    _clip_from_image(slide, beat["dur"], w, h, fps, overlay, out)
+    _clip_from_image(slide, dur, w, h, fps, overlay, out, fade=fade)
     return out
 
 
@@ -335,6 +351,80 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 # ------------------------------------------------------------------ assembly
 
+# ------------------------------------------------------------------ sound design (synthesised, no files, no licences)
+
+_SFX_RECIPES = {
+    # whoosh: pink-noise swell, band-limited, 0.5 s — section changes
+    "whoosh": "anoisesrc=d=0.55:c=pink:a=0.7:r=48000,highpass=f=500,lowpass=f=5000,afade=t=in:d=0.18,afade=t=out:st=0.25:d=0.3",
+    # tick: short bright click, 70 ms — a number lands
+    "tick": "sine=f=1400:d=0.07:r=48000,afade=t=out:st=0.01:d=0.06,volume=0.8",
+    # riser: low brown-noise swell over 1.1 s into a reveal
+    "riser": "anoisesrc=d=1.1:c=brown:a=0.9:r=48000,lowpass=f=700,afade=t=in:d=1.0,afade=t=out:st=1.0:d=0.1",
+}
+
+
+def _sfx_bank(workdir: Path) -> dict[str, Path]:
+    """Render the three sounds once per video (~50 ms each) into workdir/sfx_*.wav."""
+    bank = {}
+    for name, graph in _SFX_RECIPES.items():
+        p = workdir / f"sfx_{name}.wav"
+        if not p.exists():
+            _run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", graph, "-c:a", "pcm_s16le", str(p)])
+        bank[name] = p
+    return bank
+
+
+def _sfx_events(beats: list[dict], offsets: list[float], lead_in: list[float], chapters: bool) -> list[tuple[str, float]]:
+    """(sound, time) pairs on the final timeline. Sparse by design: a whoosh at each section change, a tick
+    when each big number finishes counting up (motion.bignumber animates 1.6 s), a riser into the first
+    number reveal of a section. Anything more and the sound design becomes noise."""
+    ev: list[tuple[str, float]] = []
+    for si, off in enumerate(offsets):
+        if si > 0 and chapters:
+            ev.append(("whoosh", max(0.0, off - lead_in[si] - 0.1)))
+    seen_riser: set[int] = set()
+    sec_idx = -1
+    for b in beats:
+        if b.get("_section_first"):
+            sec_idx += 1
+        vt = b["visual"].get("type")
+        t0 = float(b.get("_abs", 0.0))
+        if vt in ("bignumber", "compare"):
+            land = t0 + (1.6 if vt == "bignumber" else 1.45)   # = the renderers' animation lengths; sound after picture
+            if land < t0 + b["dur"]:
+                ev.append(("tick", land))
+            if sec_idx not in seen_riser and t0 > 1.3:
+                ev.append(("riser", t0 - 1.1))
+                seen_riser.add(sec_idx)
+    return sorted(ev, key=lambda e: e[1])
+
+
+def _mix_sfx(cfg: dict, voice: Path, events: list[tuple[str, float]], workdir: Path) -> Path:
+    """Mix the sound-design events under the voice track at a fixed low level. Returns the new track
+    (or the untouched voice track if there is nothing to add or ffmpeg fails)."""
+    if not events:
+        return voice
+    try:
+        bank = _sfx_bank(workdir)
+        level = float(cfg["video"].get("sfx_level", 0.18))
+        out = workdir / "voice_sfx.m4a"
+        inputs = ["-i", str(voice)]
+        parts = []
+        for i, (name, at) in enumerate(events[:80]):   # hard cap; a 10-min video has ~25
+            inputs += ["-i", str(bank[name])]
+            parts.append(f"[{i + 1}:a]adelay={int(at * 1000)}:all=1,volume={level:.2f}[s{i}]")
+        n = min(len(events), 80)
+        graph = ";".join(parts) + ";" + "".join(f"[s{i}]" for i in range(n)) + f"amix=inputs={n}:normalize=0:dropout_transition=0[sfx];" \
+                f"[0:a][sfx]amix=inputs=2:duration=first:normalize=0:dropout_transition=0[a]"
+        _run(["ffmpeg", "-y", "-loglevel", "error", *inputs, "-filter_complex", graph, "-map", "[a]",
+              "-c:a", "aac", "-b:a", "192k", str(out)])
+        print(f"      sound design: {n} cues ({', '.join(f'{k} x{sum(1 for e in events if e[0] == k)}' for k in _SFX_RECIPES if any(e[0] == k for e in events))})")
+        return out
+    except Exception as e:  # noqa: BLE001 - never fatal
+        print(f"[warn] sound design skipped: {str(e)[-160:]}")
+        return voice
+
+
 def _music_track(cfg: dict) -> Path | None:
     if not cfg["video"].get("music", False):
         return None
@@ -365,7 +455,7 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
             def _chapter(si=si, s=s):
                 fd, n = motion.chapter_card(cfg, s["heading"], si, w, h, workdir / f"frames_ch{si}")
                 c = workdir / f"chapter_{si:02d}.mp4"
-                _clip_from_frames(fd, n, CHAPTER_SECS, w, h, fps, None, c)
+                _clip_from_frames(fd, n, CHAPTER_SECS, w, h, fps, None, c, drift=False)
                 return c
             jobs.append(_chapter)
             t += CHAPTER_SECS
@@ -373,10 +463,13 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
         overlay = (visuals.lower_third(cfg, s["heading"], w, h, workdir / f"lt_{si:02d}.png", center=portrait)
                    if s.get("heading") else None)
         beats = _align_beats(s, beats_by_id.get(s["id"], []))
-        for b in beats:
-            def _beat(b=b, idx=idx, overlay=overlay, heading=s["heading"]):
-                return _beat_clip(cfg, b, idx, w, h, fps, workdir, overlay, chart, broll, heading)
+        for bi, b in enumerate(beats):
+            # v5 rhythm: hard cuts within a section; a short fade only on the section's first beat
+            def _beat(b=b, idx=idx, overlay=overlay, heading=s["heading"], fade=(bi == 0 and si > 0)):
+                return _beat_clip(cfg, b, idx, w, h, fps, workdir, overlay, chart, broll, heading, fade=fade)
             jobs.append(_beat)
+            b["_abs"] = t + b["start"]          # absolute start on the final timeline (for sound design)
+            b["_section_first"] = bi == 0
             all_beats.append(b)
             idx += 1
         t += s["duration"] + GAP
@@ -384,7 +477,7 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
         def _outro():
             fd, n = motion.outro_card(cfg, w, h, workdir / "frames_outro")
             c = workdir / "outro.mp4"
-            _clip_from_frames(fd, n, OUTRO_SECS, w, h, fps, None, c)
+            _clip_from_frames(fd, n, OUTRO_SECS, w, h, fps, None, c, fade=True, drift=False)
             return c
         jobs.append(_outro)
 
@@ -428,6 +521,10 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
 
     audio = workdir / "voice.m4a"
     concat_audio([Path(s["audio"]) for s in sections], audio, GAP, lead_in=lead_in, tail_pad=OUTRO_SECS if outro else 0.0)
+    # sound design (whoosh on section changes, tick when a number lands, riser into the first reveal of a
+    # section) is mixed UNDER the voice here, so the music ducker below keys on voice+sfx together
+    if cfg["video"].get("sfx", True):
+        audio = _mix_sfx(cfg, audio, _sfx_events(all_beats, offsets, lead_in, chapters), workdir)
 
     music = _music_track(cfg)
     base = ["ffmpeg", "-y", "-loglevel", "error", "-i", silent.name, "-i", audio.name]
@@ -435,9 +532,10 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
     if music:
         base += ["-stream_loop", "-1", "-i", str(music)]
         # music bed with real sidechain ducking: the voice compresses the music while speaking, music
-        # breathes back up in pauses (-20 dB base level; ducks a further ~12 dB under speech)
+        # breathes back up in pauses (base level from config, default -20 dB; ducks a further ~12 dB under speech)
+        mvol = float(cfg["video"].get("music_level", 0.10))
         afilter = ["-filter_complex",
-                   "[1:a]asplit=2[v][sc];[2:a]volume=0.12[m];[m][sc]sidechaincompress=threshold=0.02:ratio=8:attack=40:release=500[md];"
+                   f"[1:a]asplit=2[v][sc];[2:a]volume={mvol:.3f}[m];[m][sc]sidechaincompress=threshold=0.02:ratio=8:attack=40:release=500[md];"
                    "[v][md]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]",
                    "-map", "0:v", "-map", "[a]"]
     tail = ["-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out_mp4)]
@@ -493,12 +591,13 @@ def build_shorts(cfg: dict, script: dict, workdir: Path) -> list[dict]:
         wd.mkdir(parents=True, exist_ok=True)
         mp3 = wd / "sec_00.mp3"
         prov = provider_for(cfg, len(sh["narration"]))
-        info = synthesize(cfg, sh["narration"], mp3, provider=prov)
+        text = spoken_text(sh, prov)
+        info = synthesize(cfg, text, mp3, provider=prov)
         if info["duration"] > max_s - 1:  # too long -> speak faster once (same provider, so the voice is consistent)
             fast = {**cfg, "voice": {**cfg["voice"], "rate": "+14%", "elevenlabs_speed": 1.18, "fish_speed": 1.15}}
             if prov == "elevenlabs":
                 _eleven_available(len(sh["narration"]))   # debit the second pass from the credit reservation
-            info = synthesize(fast, sh["narration"], mp3, provider=prov)
+            info = synthesize(fast, text, mp3, provider=prov)
         return {"id": f"short_{k}", "heading": sh.get("hook_title", ""), "narration": sh["narration"],
                 "audio": str(mp3), "duration": info["duration"], "words": info["words"], "_wd": wd}
 
