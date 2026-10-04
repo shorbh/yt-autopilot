@@ -1,29 +1,36 @@
 {
   "category_scores": {
-    "big_life_money": 1.737,
-    "debt_and_credit": 0.632
+    "big_life_money": 1.718,
+    "debt_and_credit": 1.036,
+    "income_and_career": 0.21
   },
   "format_scores": {
-    "case study: two fictional people make opposite choices; follow their numbers over 10-30 years": 1.737,
-    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 1.094,
-    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 0.169
+    "case study: two fictional people make opposite choices; follow their numbers over 10-30 years": 1.718,
+    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 0.638,
+    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 1.007
   },
-  "videos_scored": 3,
+  "kind_scores": {
+    "mechanic": 1.0
+  },
+  "videos_scored": 4,
   "retention": {
     "_arItix7pNQ": {
-      "nose": 0.722,
-      "mid": 0.278,
-      "tail": 0.167
+      "nose": 0.64,
+      "mid": 0.24,
+      "tail": 0.16
     },
     "dcRxC-9fdmg": {
-      "nose": 0.8,
-      "mid": 0.4,
-      "tail": 0.4
+      "nose": 0.643,
+      "mid": 0.357,
+      "tail": 0.357
+    },
+    "GZtSyKc4ht0": {
+      "nose": 0.727,
+      "mid": 0.455,
+      "tail": 0.273
     }
   },
-  "script_hints": [
-    "Only 34% of viewers reach the midpoint. Move the worked example earlier (section s2 at the latest) and add a stronger forward tease at the end of s1 and s2."
-  ],
+  "script_hints": [],
   "target_minutes": 8.0,
-  "updated_at": "2026-09-27T10:20:40.812757+00:00"
+  "updated_at": "2026-10-04T10:52:52.426154+00:00"
 }

@@ -46,7 +46,10 @@
       "The IKEA effect: why building your own budget makes you irrationally attached to failing plans",
       "The scarcity mindset: how living paycheck-to-paycheck permanently rewires your risk tolerance by 40 percent",
       "Hot hand fallacy in investing: why beating the market once convinces 80 percent of traders they are financial geniuses",
-      "The pain of paying: why tapping a plastic card triggers 30 percent less brain activity than handing over physical cash"
+      "The pain of paying: why tapping a plastic card triggers 30 percent less brain activity than handing over physical cash",
+      "The endowment effect: why holding onto losing stocks costs the average portfolio 15 percent in annual returns",
+      "Choice overload: why offering more than 3 retirement fund options reduces employee participation by 20 percent",
+      "The optimism bias: why 80 percent of entrepreneurs underestimate their startup costs by a factor of two"
     ],
     "debt_and_credit": [
       "How credit card interest is actually calculated (daily, not monthly)",
@@ -62,7 +65,9 @@
       "Authorized user piggybacking: adding a relative to an aged account to instantly inflate credit history",
       "Hard inquiries versus soft inquiries: the exact credit score drop for a mortgage pull versus a rate check",
       "Credit card utilization tipping points: crossing the 30%, 10%, and 3% thresholds and the score penalty for 0%",
-      "Statute of limitations on debt: how zombie debt revives when you make a single 10-dollar payment"
+      "Statute of limitations on debt: how zombie debt revives when you make a single 10-dollar payment",
+      "Good debt versus bad debt: the net worth equation of borrowing at 4 percent while earning 8 percent in the market",
+      "Medical debt on your credit report: why balances under 500 dollars and paid collections no longer hurt your score"
     ],
     "saving_and_budgeting": [
       "The 50/30/20 rule: where it works and where it breaks",
@@ -81,7 +86,11 @@
       "Expense trimming by friction: the 3-account routing method to freeze impulse buying",
       "The 80/20 fixed cost audit: how to slash housing and transportation without moving",
       "Bi-weekly pay periods vs monthly budgets: fixing the 27-paycheck calendar gap",
-      "The 10% rule of joy: guilt-free spending allocations that prevent budget burnout"
+      "The 10% rule of joy: guilt-free spending allocations that prevent budget burnout",
+      "Subscription audit matrices: the 3-tier value ranking that cuts digital bloat permanently",
+      "The 14-day cash buffer: transitioning from paycheck-to-paycheck without a lump-sum savings starter",
+      "Debt avalanche vs debt snowball: mathematically proving the psychological crossover point",
+      "The 3-bank architecture: routing income to eliminate manual transfers and overdraft risk forever"
     ],
     "big_life_money": [
       "Rent vs buy: the real math including the costs people forget",
@@ -104,7 +113,13 @@
       "Index fund fee drag: how a 0.5% expense ratio costs you six figures over 30 years",
       "Refinancing a mortgage: calculating the break-even month based on closing costs and interest spread",
       "Inherited IRA SECURE Act rules: the 10-year withdrawal distribution strategy to minimize tax brackets",
-      "Solar panel ROI: calculating payback periods factoring in net metering changes and financing interest"
+      "Solar panel ROI: calculating payback periods factoring in net metering changes and financing interest",
+      "Barista FIRE: calculating the exact portfolio size needed to cover your gap expenses with part-time work",
+      "Series I Bonds vs High-Yield Savings Accounts: modeling real yields during fluctuating inflation regimes",
+      "Umbrella retirement drawdowns: the variable percentage withdrawal strategy versus the strict 4 percent rule",
+      "Mega Backdoor Roth: evaluating the after-tax non-roth contribution limits and plan-specific distribution rules",
+      "Defined benefit pension buyouts: how to calculate the present value lump-sum offer versus lifetime monthly annuity",
+      "Cost segregation studies for residential real estate: depreciation recapture math and cash flow acceleration"
     ],
     "income_and_career": [
       "How to calculate your real hourly wage (commute, taxes, gear included)",
@@ -122,7 +137,8 @@
       "Overtime vs. promotion: at what hourly threshold does exempt salary status cut your real pay",
       "The 3-month emergency fund myth: calculating your personal solvency runway based on fixed-to-variable expense ratios",
       "Career pivoting math: calculating the 3-year net worth impact of taking a 20% pay cut for a higher-growth industry",
-      "Remote work tax traps: how moving across state or national lines alters your net take-home pay by more than 10%"
+      "Remote work tax traps: how moving across state or national lines alters your net take-home pay by more than 10%",
+      "Bonus vs. base salary: valuing performance incentives using historical payout probabilities and clawback risks"
     ],
     "systems_and_history": [
       "How banks create money when they lend (fractional reserve, simply)",
@@ -141,7 +157,11 @@
       "How bond yield curves invert and why that specific signal has predicted every recession since 1955",
       "How the Bretton Woods system was designed in 1944 and why it collapsed under 35 dollars per ounce of gold",
       "How corporate buybacks replaced dividends after the 1982 SEC Rule 10b-18 change",
-      "How negative interest rates function in practice and why depositors in Denmark paid to hold mortgages"
+      "How negative interest rates function in practice and why depositors in Denmark paid to hold mortgages",
+      "How venture capitalists use the 1-in-10 power law to absorb massive startup failures and still return 20x funds",
+      "How hyperinflation destroyed the German Mark in 1923 using wheelbarrows of cash and the velocity of money",
+      "How compound penalty APRs and minimum payment traps keep revolving debt growing for 30 years",
+      "How algorithmic flash crashes occur when high-frequency trading bots execute millions of orders in microseconds"
     ]
   }
 }
