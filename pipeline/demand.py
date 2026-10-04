@@ -38,7 +38,7 @@ def autocomplete(seed: str, limit: int = 10) -> list[str]:
 def harvest(cfg: dict, covered: list[str]) -> list[str]:
     """Real queries people type, minus covered topics, question-shaped first."""
     from .topics import similar
-    seeds = list(cfg.get("topics", {}).get("demand_seeds") or [])
+    seeds = list(cfg.get("topics", {}).get("demand_seeds") or []) + list(cfg.get("topics", {}).get("name_hook_seeds") or [])
     if not seeds:
         return []
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -51,7 +51,8 @@ def harvest(cfg: dict, covered: list[str]) -> list[str]:
                 continue
             seen.add(k)
             out.append(q)
-    out.sort(key=lambda q: 0 if _QUESTION.search(q) else 1)   # stable: question-shaped queries first
+    from .topics import is_map_query
+    out.sort(key=lambda q: 0 if is_map_query(q) else (1 if _QUESTION.search(q) else 2))   # maps, then questions, then the rest
     return out[:220]
 
 
@@ -79,7 +80,7 @@ You get real search queries people typed into YouTube. Pick the BEST video topic
 (3) is specific (has or implies a number, a product, a decision), not vague ('how to be rich'); (4) is not already covered.
 Return the query text VERBATIM — its wording is what search matches. Return ONLY JSON."""
 
-SCHEMA = """{"picks": [{"query": "verbatim query", "category": "one of the given categories", "kind": "mechanic | story", "why": "<= 12 words"}]}"""
+SCHEMA = """{"picks": [{"query": "verbatim query", "category": "one of the given categories", "kind": "map | mechanic | story", "why": "<= 12 words"}]}"""
 
 
 def pick(cfg: dict, categories: list[str], covered: list[str], n: int = 3) -> dict | None:
@@ -88,8 +89,10 @@ def pick(cfg: dict, categories: list[str], covered: list[str], n: int = 3) -> di
         print(f"[demand] only {len(queries)} candidate queries; skipping")
         return None
     user = (f"Channel: {cfg['channel']['name']} — {cfg['channel']['tagline']}\nCategories: {', '.join(categories)}\n"
-            "kind = 'story' when the query is about a company, product, price or event ('why is rent so expensive', "
-            "'how does venmo make money'); 'mechanic' when it is about a rule, calculation or personal decision.\n"
+            "kind = 'map' when the query asks for a complete overview or comparison ('every type of investment explained', "
+            "'index funds vs mutual funds vs etf', 'steps to start investing') — these out-perform everything else on small "
+            "channels, so PREFER them when present; 'story' when it is about a company, product, price or event ('why is rent "
+            "so expensive', 'how does venmo make money'); 'mechanic' when it is about a rule, calculation or personal decision.\n"
             f"Already covered (skip anything similar): {'; '.join(covered[-30:]) or 'nothing'}\n\n"
             "Queries:\n" + "\n".join(f"- {q}" for q in queries) + f"\n\nReturn the top {n} as JSON exactly like:\n{SCHEMA}")
     try:
@@ -110,6 +113,7 @@ def pick(cfg: dict, categories: list[str], covered: list[str], n: int = 3) -> di
     comp = best.get("competition")
     print(f"[demand] '{best['query']}'  ({best.get('kind', 'mechanic')}; small-channel share in top 10: "
           f"{comp['small_share'] if comp else 'n/a'})")
+    k = str(best.get("kind", "")).lower()
+    kind = "map" if k.startswith("map") else ("story" if k.startswith("s") else "mechanic")
     return {"query": str(best["query"]).strip(), "category": cat if cat in categories else categories[0],
-            "kind": "story" if str(best.get("kind", "")).lower().startswith("s") else "mechanic",
-            "competition": comp}
+            "kind": kind, "competition": comp}

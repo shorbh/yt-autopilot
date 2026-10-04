@@ -27,8 +27,10 @@ def main() -> int:
     stats = fetch_video_stats()
     perf = score_and_save(stats, cfg) or load_performance()
     totals = channel_totals()
+    from pipeline.outliers import scout as outlier_scout
+    outliers = outlier_scout(cfg)          # what is winning in the niche right now (feeds prompts + the bank)
     added = refill_topics(cfg, perf)
-    report = weekly_report(cfg, stats, perf, totals, added)
+    report = weekly_report(cfg, stats, perf, totals, added, outliers)
     out = ROOT / "reports"
     out.mkdir(exist_ok=True)
     (out / "latest.md").write_text(report, encoding="utf-8")

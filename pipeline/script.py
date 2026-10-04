@@ -41,7 +41,7 @@ Write for the EAR, not the page (a synthetic voice reads this; the words must ca
 Return ONLY valid JSON matching the schema requested."""
 
 SCHEMA = """{
-  "title": "<= 60 chars, Headline Case with punctuation. EITHER the question people type into YouTube (when a SEARCH QUERY is given, keep its words and order but write it as a headline: 'How Much House Can I Afford With a $75K Salary?') OR a specific claim with a number ('A 7% Mortgage Costs $200,000 More'). Numbers ALWAYS as numerals/symbols (40%, $200,000 — never 'Forty Percent'). Plain words a 25-year-old uses; no jargon terms as the subject ('Authorized User Piggybacking'), no 'Colon: Subtitle' constructions, no clickbait lies",
+  "title": "<= 60 chars, Headline Case with punctuation. Pick the pattern that fits the KIND: MAP -> 'Every Type of X Explained for Beginners' | 'A vs B vs C vs D Explained' | 'How to Go From X to Y (Step by Step)' | 'How Much You NEED to X to Y in N Years'; SEARCH QUERY given -> keep its words and order as a headline ('How Much House Can I Afford With a $75K Salary?'); otherwise a specific claim with a number ('A 7% Mortgage Costs $200,000 More'). Words that out-perform on small channels: Explained, for Beginners, Every Type, vs, Step by Step, NEED. Numbers ALWAYS as numerals/symbols (40%, $200,000 — never 'Forty Percent'). Plain words a 25-year-old uses; no jargon terms as the subject ('Authorized User Piggybacking'), no 'Colon: Subtitle' constructions, no clickbait lies",
   "alt_titles": ["2 alternative titles"],
   "thumbnail": {
     "hero": "THE number the viewer will search for, or the cost delta, <= 9 chars, e.g. '+$200K' | '7%' | '$1,348/mo'. Must appear in the title or be its direct consequence; NEVER a derived difference like '2%' when the title says 7%",
@@ -49,6 +49,8 @@ SCHEMA = """{
     "hero_is_cost": true,
     "compare": {"left": {"label": "5% RATE", "value": "$373K"}, "right": {"label": "7% RATE", "value": "$558K"}, "_rule": "LEFT = the BETTER outcome for the viewer (shown green), RIGHT = the worse/costlier one (shown red)"},
     "icon": "one Lucide icon for the topic: home | car | piggy-bank | credit-card | briefcase | receipt | landmark | graduation-cap | heart-pulse | shopping-cart | chart-line | wallet",
+    "items": [{"label": "STOCKS", "icon": "chart-line"}, {"label": "BONDS", "icon": "landmark"}, {"label": "REAL ESTATE", "icon": "home"}, {"label": "CRYPTO", "icon": "coins"}],
+    "map_title": "2-4 words for the bright map thumbnail, e.g. 'EVERY INVESTMENT' | 'EVERY TYPE OF FUND' | 'SAVING → INVESTING' (MAP kind only; else null)",
     "query": "3-5 word stock-photo search for ONE PERSON with an expression matching the title's emotion, e.g. 'worried man glasses portrait' | 'shocked woman laptop' | 'serious businesswoman office'"
   },
   "description_hook": "1-2 sentences, <= 150 characters TOTAL, starting with the primary keyword phrase, written as a curiosity hook that extends the title (never 'In this video we...'). Numerals and symbols ($400,000, 7%), never spelled-out numbers.",
@@ -119,11 +121,26 @@ def generate_script(cfg: dict, pick: dict, previous: dict | None = None) -> dict
         query_block = (f"\nSEARCH QUERY (people type exactly this into YouTube; the title must keep these words in this order, "
                        f"and the hook must speak them in the first two sentences): \"{pick['query']}\"\n")
     kind_block = ""
-    if pick.get("kind") == "story":
+    if pick.get("kind") == "map":
+        kind_block = ("\nKIND: MAP (beginner taxonomy — the format that out-performs 50-100x on small channels). Promise COMPLETE "
+                      "coverage in the title and deliver it: 6-8 items (or 4 options, or N steps) in a sensible order, ONE "
+                      "paragraph each with the ONE number that matters for it (cost, return, risk, limit, time), the same "
+                      "criteria applied to every item so they are comparable, and a clear 'start here if you are X' decision at "
+                      "the end. Sections s1..s5 should each cover 1-2 items; the hook names how many items and the single most "
+                      "surprising number among them. Also return 'thumbnail.items' and 'thumbnail.map_title'.\n")
+    elif pick.get("kind") == "story":
         kind_block = ("\nKIND: MONEY STORY. Tell it as a narrative about the subject (the company, product, price or event): "
                       "what happened, the mechanism underneath, the numbers, and what it means for the viewer's own money. "
                       "Still include one worked calculation the viewer can reproduce.\n")
+        if "name-hook" in str(pick.get("format", "")):
+            kind_block += ("REAL PERSON RULES (non-negotiable): the named person is the SUBJECT of analysis. State only positions "
+                           "that appear in SOURCES, attributed ('in his 2013 shareholder letter, Buffett wrote…'). Never invent or "
+                           "paraphrase-as-quote; never imply they endorse this channel or any product; never speculate about their "
+                           "private finances or motives. Our conclusions are ours: 'the math says…', not 'he says…'. Title pattern: "
+                           "\"<Name>'s <Rule> — Checked Against the Math\" or \"Why <Name>'s <Rule> Works (and When It Doesn't)\".\n")
     source_block = pick.get("source_block") or ""
+    from .outliers import patterns_block
+    win_block = patterns_block(10)   # titles out-performing on small channels this quarter (empty until the first Sunday scout)
     prev_block = ""
     if previous and previous.get("title"):
         prev_block = (f"\nPREVIOUS VIDEO ON THE CHANNEL: \"{previous['title']}\" — in the 'close' section, INSTEAD of the generic "
@@ -136,7 +153,7 @@ Sign-off (must appear verbatim at the end of the 'close' section): {ch['signoff'
 
 TOPIC: {pick['topic']}
 CATEGORY: {pick['category']}
-FORMAT TO FOLLOW: {pick['format']}{query_block}{kind_block}{news_block}{prev_block}{source_block}
+FORMAT TO FOLLOW: {pick['format']}{query_block}{kind_block}{news_block}{prev_block}{win_block}{source_block}
 
 Total narration length across all sections: about {target_words} words (±10%).
 Use 7 sections total: hook, s1..s5, close. Mark exactly 1-2 sections as short_worthy.
@@ -148,6 +165,10 @@ THUMBNAIL: 'hero' is the single number a scroller must see — the headline figu
 'compare' is only for videos with two directly comparable figures in the same unit; otherwise set it to null.
 'hero_is_cost' is true when the hero is money lost / extra paid (shown in red), false when it is a gain or a rate (gold).
 'query' must describe a PERSON (face visible) whose expression matches the title's emotion — faces lift click-through.
+For MAP videos also return 'items': the 4-8 things the video covers, each with a 1-2 word UPPERCASE label and a Lucide icon from:
+chart-line, landmark, home, building-2, coins, piggy-bank, wallet, credit-card, receipt, briefcase, shield, shield-check, percent,
+trending-up, trending-down, calendar, clock, gift, graduation-cap, heart-pulse, car, globe, factory, gem, scale, lock, key, banknote,
+hand-coins, users, layers, package, umbrella, target. The bright icon-grid thumbnail is built from these.
 The Shorts must each be a different angle on the topic (the number, the mistake, the rule, the story) and must NOT repeat the long video's sentences.
 SHORTS COLD OPEN: 4 of 5 viewers swiped away in the first second on this channel. Every Short's first sentence is the claim
 itself (a loss, a contradiction or a number, <= 12 words) and 'hook_title' is that same claim in <= 7 words — it fills the screen
@@ -173,6 +194,7 @@ Return JSON exactly matching this schema:
             print(f"[warn] second draft failed ({str(e)[:100]}); keeping the first")
     data["sources"] = [{"title": s.get("title", ""), "url": s.get("url", "")} for s in (pick.get("sources") or []) if s.get("url")]
     data["real_people"] = pick.get("kind") == "story"   # grounded stories: no stock faces for real people (render/storyboard)
+    data["kind"] = pick.get("kind", "mechanic")
     return data
 
 
@@ -270,7 +292,14 @@ def _validate(d: dict, cfg: dict) -> None:
     elif hic is None:
         hic = hero.startswith(("+", "-")) or "cost" in d["title"].lower()
     icon = th.get("icon")
+    items = []
+    for it in (th.get("items") or [])[:8]:
+        if isinstance(it, dict) and it.get("label"):
+            items.append({"label": " ".join(str(it["label"]).upper().split()[:2])[:14],
+                          "icon": str(it.get("icon") or "").strip().lower() or None})
     d["thumbnail"] = {
+        "items": items,
+        "map_title": " ".join(str(th.get("map_title") or "").upper().split()[:4])[:24],
         "hero": hero,
         "hero_label": " ".join(str(th.get("hero_label") or "").split()[:3]).strip()[:24].upper(),
         "hero_is_cost": bool(hic),

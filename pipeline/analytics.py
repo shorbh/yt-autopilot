@@ -153,24 +153,27 @@ def score_and_save(stats: dict[str, dict], cfg: dict | None = None) -> dict:
 
 def refill_topics(cfg: dict, perf: dict, per_category: int = 5) -> int:
     """Ask the LLM for fresh, non-duplicate topics — more for winning categories."""
+    from .outliers import patterns_block
     bank = load_bank()
     added = 0
+    win = patterns_block(8)
     for cat, titles in bank["categories"].items():
         weight = perf.get("category_scores", {}).get(cat, 1.0)
         n = max(2, round(per_category * min(2.0, max(0.5, weight))))
         data = ask_json(
             cfg,
             "You are a YouTube strategist for a personal-finance explainer channel. Return JSON only.",
-            f"Category: {cat}\nExisting topics (do not repeat or paraphrase):\n- " + "\n- ".join(titles[-40:]) +
-            f"\n\nPropose {n} NEW video topics for this category. Each must contain a concrete mechanism, number, or comparison "
-            f"and be evergreen for a global English audience. Format: {{\"topics\": [\"...\", ...]}}",
+            f"Category: {cat}\nExisting topics (do not repeat or paraphrase):\n- " + "\n- ".join(titles[-40:]) + win +
+            f"\n\nPropose {n} NEW video topics for this category. Favour beginner MAPS ('every type of X explained', 'A vs B vs C', "
+            f"'the steps from X to Y') and topics shaped like the out-performing titles above; each must contain a concrete "
+            f"mechanism, number, or comparison and be evergreen for a global English audience. Format: {{\"topics\": [\"...\", ...]}}",
             temperature=0.9,
         )
         added += add_topics(cat, [t for t in data.get("topics", []) if isinstance(t, str) and 20 < len(t) < 120])
     return added
 
 
-def weekly_report(cfg: dict, stats: dict, perf: dict, totals: dict, added: int) -> str:
+def weekly_report(cfg: dict, stats: dict, perf: dict, totals: dict, added: int, outliers: list[dict] | None = None) -> str:
     pub = load_published()
     lines = [f"# Weekly channel review — {date.today().isoformat()}", ""]
     if totals:
@@ -199,5 +202,11 @@ def weekly_report(cfg: dict, stats: dict, perf: dict, totals: dict, added: int) 
             v = cfg["video"]
             lines += ["", f"**Target length next week:** {perf['target_minutes']:.0f} min "
                           f"(adaptive, floor {v.get('min_minutes', 7)} / cap {v.get('max_minutes', 12)})"]
+    if outliers:
+        lines += ["", "## Outliers in the niche this week (views ÷ subscribers ≥ 10)", "",
+                  "| Title | Channel (subs) | Views | Ratio | Length |", "|---|---|---|---|---|"]
+        for o in outliers[:10]:
+            lines.append(f"| {o['title'][:60]} | {o['channel'][:22]} ({o.get('subs', 0):,}) | {o.get('views', 0):,} | "
+                         f"{o.get('ratio', 0):.0f}x | {o.get('duration_s', 0) // 60} min |")
     lines += ["", f"Topic bank refilled with **{added}** new topics.", ""]
     return "\n".join(lines)

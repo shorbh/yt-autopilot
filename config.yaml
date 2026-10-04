@@ -63,6 +63,16 @@ topics:
   # --- v4: demand-validated topics (YouTube autocomplete, free) run BEFORE the evergreen bank ---
   demand: true
   demand_seeds:              # autocomplete is queried for each; real questions people type become titles
+    # v6 outlier patterns: beginner MAPS ("every type of X explained", "A vs B vs C") out-perform narrow mechanics 50-100x
+    - "every type of investment explained"
+    - "every type of debt explained"
+    - "types of retirement accounts explained"
+    - "index funds vs mutual funds vs etf"
+    - "roth ira vs traditional ira vs 401k"
+    - "personal finance basics for beginners"
+    - "financial literacy explained"
+    - "how to start investing step by step"
+    - "how much to invest per month to retire"
     - "how much house can i afford"
     - "how much should i save"
     - "how much do i need to retire"
@@ -83,7 +93,21 @@ topics:
     - "how much does it cost to"
     - "should i buy a house in 2026"
     - "how to calculate"
-  # --- v4: money STORIES (broad, discovery) vs MECHANICS (narrow, deep). Share drifts with the weekly review. ---
+  # --- v6: MAPS (beginner taxonomies — the outlier pattern), STORIES (broad, discovery), MECHANICS (narrow, deep) ---
+  map_share: 0.4             # share of long videos that are maps; stories take story_share of the NON-map rest; mechanics the remainder (≈ 40/36/24)
+  map_formats:
+    - "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with"
+    - "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation"
+    - "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')"
+  map_topics:                # seed maps; the demand engine and outlier scout add more
+    - "Every type of investment explained for beginners"
+    - "Every type of retirement account explained (401k, IRA, Roth, HSA, pension)"
+    - "Every type of debt explained, ranked by how dangerous it is"
+    - "Index funds vs mutual funds vs ETFs vs hedge funds explained"
+    - "Every type of bank account explained and which one your money should be in"
+    - "Every type of insurance explained and which ones you actually need"
+    - "The 7 steps from saving to investing, in order"
+    - "How much you need to invest every month to retire in 10, 15 and 20 years"
   story_share: 0.6
   story_formats:
     - "price story: why X costs what it costs — follow one dollar through the supply chain, with the numbers from the sources"
@@ -91,6 +115,27 @@ topics:
     - "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers"
     - "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why"
     - "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example"
+    - "name-hook explainer: a famous investor/author's DOCUMENTED rule or claim (from a book, interview, letter, famous bet — cited from the sources), then the math checked against it with a worked example; the name is the subject of the analysis, never the speaker of our claims"
+  name_hook_seeds:           # autocomplete seeds for name-hook topics (documented public figures with famous money rules)
+    - "warren buffett rule"
+    - "dave ramsey baby steps"
+    - "ramit sethi"
+    - "morgan housel psychology of money"
+    - "robert kiyosaki rich dad"
+    - "charlie munger advice"
+  outlier_queries:           # v6 weekly outlier scout (YouTube search, last 90 days, 4-20 min videos; ratio = views / subscribers)
+    - "investing explained for beginners"
+    - "every type of investment explained"
+    - "personal finance basics"
+    - "how much to retire"
+    - "index funds vs etf"
+    - "roth ira explained"
+    - "credit score explained"
+    - "how mortgages work"
+    - "pay off debt fast"
+    - "financial literacy"
+    - "how to start investing"
+    - "money mistakes"
   trend_queries:             # Google News searches (last 7 days, US edition)
     - "mortgage rates"
     - "Fed interest rate decision"

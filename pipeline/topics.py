@@ -85,10 +85,34 @@ def _story_turn(cfg: dict, published: list[dict]) -> bool:
     ks = load_performance().get("kind_scores") or {}
     if ks.get("story") and ks.get("mechanic"):   # data-driven drift toward what earns views per impression
         share = max(0.3, min(0.8, share * (ks["story"] / ks["mechanic"]) ** 0.5))
-    recent = [p for p in published if p.get("kind") == "long"][-10:]
+    # story_share is a share of the NON-map videos (maps are decided first by _map_turn)
+    recent = [p for p in published if p.get("kind") == "long" and p.get("topic_kind") != "map"][-10:]
     if not recent:
         return random.random() < share
     done = sum(1 for p in recent if p.get("topic_kind") == "story") / len(recent)
+    return done < share
+
+
+_MAP_RE = re.compile(r"\b(every type|all types|types of|kinds of|for beginners|basics|step by step|\d+ steps|the steps|"
+                     r"steps to|ranked|vs\.? .* vs\.?|versus .* versus|complete guide|everything you need|"
+                     r"how much (do i|you|i) (need|should))\b", re.I)   # bare 'explained' is NOT enough — many mechanics use it
+
+
+def is_map_query(text: str) -> bool:
+    """Map-shaped topic: a taxonomy / comparison / path that promises complete coverage."""
+    return bool(_MAP_RE.search(str(text or "")))
+
+
+def _map_turn(cfg: dict, published: list[dict]) -> bool:
+    share = float(cfg.get("topics", {}).get("map_share", 0.4))
+    ks = load_performance().get("kind_scores") or {}
+    others = [v for k, v in ks.items() if k != "map"]
+    if ks.get("map") and others and sum(others) > 0:
+        share = max(0.2, min(0.7, share * (ks["map"] / (sum(others) / len(others))) ** 0.5))
+    recent = [p for p in published if p.get("kind") == "long"][-10:]
+    if not recent:
+        return random.random() < share
+    done = sum(1 for p in recent if p.get("topic_kind") == "map") / len(recent)
     return done < share
 
 
@@ -108,12 +132,35 @@ def pick_topic(seed: int | None = None, cfg: dict | None = None, forced: str | N
     formats = [f for f in bank["formats"] if f not in recent_formats] or bank["formats"]
     fmt = _weighted_choice(formats, perf.get("format_scores", {}))
     story_formats = list(tcfg.get("story_formats") or [])
+    map_formats = list(tcfg.get("map_formats") or [])
 
     def _finish(d: dict) -> dict:
-        kind = d.get("kind") or ("story" if cfg and _story_turn(cfg, published) and story_formats else "mechanic")
-        d["kind"] = kind
-        if kind == "story" and story_formats:
-            d["format"] = random.choice([f for f in story_formats if f not in recent_formats] or story_formats)
+        if not d.get("kind"):
+            if cfg and map_formats and _map_turn(cfg, published):
+                d["kind"] = "map"
+            elif cfg and story_formats and _story_turn(cfg, published):
+                d["kind"] = "story"
+            else:
+                d["kind"] = "mechanic"
+        if d["kind"] == "map" and (is_map_query(d.get("query") or d["topic"]) or d.get("source") in ("map", "forced", "demand")):
+            pass                             # demand picks: trust the LLM's 'map' label; bank/trend topics must look like maps
+        elif d["kind"] == "map":
+            d["kind"] = "story" if (cfg and story_formats and _story_turn(cfg, published)) else "mechanic"
+        kind = d["kind"]
+        if kind == "map" and map_formats:
+            d["format"] = random.choice([f for f in map_formats if f not in recent_formats] or map_formats)
+        elif kind == "story" and story_formats:
+            seeds = [s.split() for s in (tcfg.get("name_hook_seeds") or [])]
+            # match "warren buffett" OR the surname alone ("buffett's 90/10 rule"); seeds are "First Last ..." by convention
+            names = {" ".join(s[:2]).lower() for s in seeds if len(s) >= 2} | {s[1].lower() for s in seeds if len(s) >= 2 and len(s[1]) > 3}
+            subject = (d.get("query") or d["topic"]).lower()
+            name_fmt = next((f for f in story_formats if f.startswith("name-hook")), None)
+            if name_fmt and any(re.search(rf"\b{re.escape(nm)}\b", subject) for nm in names):
+                d["format"] = name_fmt                       # a famous name in the topic -> the guarded name-hook format
+            else:
+                pool = [f for f in story_formats if f not in recent_formats and not f.startswith("name-hook")] or \
+                       [f for f in story_formats if not f.startswith("name-hook")] or story_formats
+                d["format"] = random.choice(pool)
         else:
             d.setdefault("format", fmt)
         if cfg is not None and kind == "story":
@@ -127,9 +174,22 @@ def pick_topic(seed: int | None = None, cfg: dict | None = None, forced: str | N
         return d
 
     if forced:
-        # a hand-typed topic is a mechanic unless it is phrased as a story ("why is X so expensive", "how does X make money")
-        kind = "story" if re.search(r"\b(why is|why are|how does .* make money|went (broke|bankrupt)|so expensive|history of)\b", forced.lower()) else "mechanic"
+        # a hand-typed topic: map if map-shaped, story if phrased like one, else mechanic
+        if is_map_query(forced):
+            kind = "map"
+        elif re.search(r"\b(why is|why are|how does .* make money|went (broke|bankrupt)|so expensive|history of)\b", forced.lower()):
+            kind = "story"
+        else:
+            kind = "mechanic"
         return _finish({"category": _weighted_choice(cats, perf.get("category_scores", {})), "topic": forced, "source": "forced", "kind": kind})
+
+    # v6: MAPS first when it is a map turn — the outlier pattern (beginner taxonomies, 50-100x channel baseline)
+    if cfg is not None and map_formats and _map_turn(cfg, published):
+        pool = [t for t in (tcfg.get("map_topics") or []) if not is_covered(t, covered)]
+        if pool:
+            topic = random.choice(pool)
+            return _finish({"category": _weighted_choice(cats, perf.get("category_scores", {})), "topic": topic,
+                            "source": "map", "kind": "map"})
 
     if cfg is not None and not _trend_recently(published, int(tcfg.get("trend_max_per_days", 7))):
         from .trends import scout

@@ -648,6 +648,20 @@ def thumbnail(cfg: dict, script: dict, workdir: Path) -> Path:
     photos = visuals.pexels_photos(spec["query"], [workdir / "thumb_bg.jpg", workdir / "thumb_bg2.jpg"])
     pa = photos[0] if photos else None
     pb = photos[1] if len(photos) > 1 else pa
+    th = script.get("thumbnail") if isinstance(script.get("thumbnail"), dict) else {}
+    items = [i for i in (th.get("items") or []) if isinstance(i, dict) and i.get("label")]
+    if script.get("kind") == "map" and len(items) >= 4:
+        # v6 outlier pattern: bright, flat, labelled icon grid (the two >100x videos in the reference set).
+        # A = bright map; B = the dark hero so Studio's Test & Compare can tell us which grammar wins for us.
+        a = _thumb_map(cfg, th, items, workdir / "thumbnail.jpg")
+        try:
+            _thumb_hero(cfg, spec, workdir / "thumbnail_B.jpg", pa)
+            alts = script.get("alt_titles")
+            alt = (alts[0] if isinstance(alts, list) and alts else None) or script["title"]
+            _thumb_hero(cfg, spec, workdir / "thumbnail_C.jpg", pb, title_text=alt)
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] thumbnail variants failed: {str(e)[:120]}")
+        return a
     a = _thumb_hero(cfg, spec, workdir / "thumbnail.jpg", pa)
     try:
         if spec["compare"]:
@@ -724,6 +738,46 @@ def _thumb_hero(cfg: dict, spec: dict, out: Path, photo: Path | None, title_text
             motion.draw_fit(cfg, d, label, (60, y0 + hf.size * 1.1, 60 + box_w, y0 + hf.size * 1.1 + 100), 84,
                             (255, 255, 255), floor=52, max_lines=1, stroke=7)
     _thumb_chrome(cfg, d, img, spec.get("icon"))
+    img.save(out, "JPEG", quality=90, optimize=True)
+    return out
+
+
+_MAP_BG = (255, 214, 102)          # warm yellow (brand accent2) — bright flat thumbnails are the outlier grammar
+_MAP_TILES = [(255, 90, 95), (61, 220, 151), (80, 140, 255), (255, 150, 60), (170, 100, 255), (40, 200, 220), (255, 110, 170), (120, 200, 80)]
+
+
+def _thumb_map(cfg: dict, th: dict, items: list[dict], out: Path) -> Path:
+    """Bright labelled icon grid: 4 -> 2x2 big tiles, 5-6 -> 3x2, 7-8 -> 4x2. Title strip at the top (2-4 words).
+    Flat colours, thick black labels — readable at 300 px on a TV, which is where most of our watch time is."""
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (_TW, _TH), _MAP_BG)
+    d = ImageDraw.Draw(img)
+    title = (th.get("map_title") or "").strip() or "EVERY TYPE EXPLAINED"
+    tf = motion._fit_font(cfg, d, title, _TW * 0.9, 118, floor=70)
+    d.text((_TW / 2, 86), title, font=tf, fill=(20, 20, 30), anchor="mm", stroke_width=3, stroke_fill=(255, 255, 255))
+    n = min(8, max(4, len(items)))
+    cols = 2 if n <= 4 else (3 if n <= 6 else 4)
+    rows = -(-n // cols)
+    top, bottom, side, gap = 170, _TH - 60, 50, 22
+    tw = (_TW - 2 * side - (cols - 1) * gap) // cols
+    thh = (bottom - top - (rows - 1) * gap) // rows
+    for i, it in enumerate(items[:n]):
+        r, c = divmod(i, cols)
+        x0, y0 = side + c * (tw + gap), top + r * (thh + gap)
+        col = _MAP_TILES[i % len(_MAP_TILES)]
+        d.rounded_rectangle([x0, y0, x0 + tw, y0 + thh], radius=26, fill=col, outline=(20, 20, 30), width=5)
+        isz = int(min(tw, thh) * 0.46)
+        ic = assets_remote.icon(it.get("icon") or "", motion.ICON_BASE, (20, 20, 30)) if it.get("icon") else None
+        if ic is not None:
+            ic = ic.resize((isz, isz))
+            img.paste(ic, (int(x0 + tw / 2 - isz / 2), int(y0 + thh * 0.42 - isz / 2)), ic)
+        else:
+            d.ellipse([x0 + tw / 2 - isz / 2, y0 + thh * 0.42 - isz / 2, x0 + tw / 2 + isz / 2, y0 + thh * 0.42 + isz / 2],
+                      outline=(20, 20, 30), width=6)
+        lf = motion._fit_font(cfg, d, str(it["label"]), tw * 0.9, int(thh * 0.2), floor=26)
+        d.text((x0 + tw / 2, y0 + thh * 0.83), str(it["label"]), font=lf, fill=(255, 255, 255), anchor="mm",
+               stroke_width=max(3, lf.size // 9), stroke_fill=(20, 20, 30))
+    d.text((_TW - 26, _TH - 28), cfg["channel"]["name"].upper(), font=visuals.font(cfg, 26), fill=(20, 20, 30), anchor="rm")
     img.save(out, "JPEG", quality=90, optimize=True)
     return out
 
