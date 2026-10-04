@@ -1,0 +1,46 @@
+name: Design narrator voice (Fish Audio)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "generate = make 4 candidates to listen to; create = turn the picked candidate into a reusable voice"
+        type: choice
+        default: generate
+        options: [generate, create]
+      pick:
+        description: "Candidate index to create the voice from (create mode)"
+        default: "0"
+      seed:
+        description: "Seed (keep the same between generate and create so the candidates match)"
+        default: "20261004"
+      brief:
+        description: "Override the voice brief (optional)"
+        required: false
+
+jobs:
+  design:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Voice design
+        env:
+          FISH_API_KEY: ${{ secrets.FISH_API_KEY }}
+          MODE: ${{ inputs.mode }}
+          PICK: ${{ inputs.pick }}
+          SEED: ${{ inputs.seed }}
+          BRIEF: ${{ inputs.brief }}
+        run: |
+          ARGS=(--mode "$MODE" --pick "$PICK" --seed "$SEED")
+          if [ -n "$BRIEF" ]; then ARGS+=(--brief "$BRIEF"); fi
+          python tools/voice_design.py "${ARGS[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voice-candidates
+          path: voice_design_out/
+          retention-days: 7

@@ -22,8 +22,12 @@ voice:
   order: ["fish", "elevenlabs", "edge"]
   # --- Fish Audio (FISH_API_KEY). s2.1-pro-free = production model at $0; word timings via Fish ASR ($0.36/audio hour) ---
   fish_model: "s2.1-pro-free"
-  fish_reference_id: "97afe090973a4254b6d4e6596178a37a"      # voice id from fish.audio/app/discovery (pick an English narrator); empty = Fish's default voice
+  fish_reference_id: "5c8dc6a69c0b4edfb32634db6384bf34"      # voice id from fish.audio/app/discovery (pick an English narrator); empty = Fish's default voice
   fish_speed: 1.0
+  fish_temperature: 0.85     # 0.7 = Fish default (steadier, flatter); ~0.9 = more intonation variety; >1.0 risks artefacts
+  fish_top_p: 0.8
+  cue_density: "medium"      # low | medium | high — how often the delivery pass adds [bracket] cues. Playground test (Oct 4):
+                             #   high = expressive but sometimes robotic; medium is the target; drop to low once the voice itself is expressive
   # --- ElevenLabs (premium; free tier is refused from CI; Starter $5 = 30k credits; turbo model = 0.5 credit/char) ---
   elevenlabs_voice_id: "nPczCjzI2devNBz1zQrb"   # "Brian" — deep, warm US narrator. Browse: elevenlabs.io/voice-library
   elevenlabs_model: "eleven_turbo_v2_5"        # half the credit cost of multilingual_v2, quality is close

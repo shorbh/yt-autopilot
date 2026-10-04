@@ -37,8 +37,8 @@ class _ElevenDisabled(RuntimeError):
 
 
 _FISH = "https://api.fish.audio/v1"
-_fish_state = {"ok": None}   # None = untested, True/False after the first call this run
-_TAG_RE = re.compile(r"\[[^\]]{1,40}\]|\((?:break|long-break|breath)\)")   # Fish emotion/pause cues, never captioned
+_fish_state = {"ok": None, "asr": True}   # ok: None = untested, True/False after the first TTS call; asr: off after a 402/401
+_TAG_RE = re.compile(r"\[[^\]]{1,60}\]|\((?:break|long-break|breath)\)")   # Fish emotion/pause cues, never captioned
 
 
 def _fish_ok() -> bool:
@@ -50,7 +50,9 @@ def _fish_synth(cfg: dict, text: str, out_mp3: Path) -> list[dict]:
     v = cfg["voice"]
     key = env("FISH_API_KEY")
     body = {"text": text, "format": "mp3", "mp3_bitrate": 128, "normalize": True, "latency": "normal",
-            "prosody": {"speed": float(v.get("fish_speed", 1.0)), "volume": 0}}
+            "prosody": {"speed": float(v.get("fish_speed", 1.0)), "volume": 0},
+            # sampling: higher temperature = more prosodic variation (default 0.7 reads flat on narration voices)
+            "temperature": float(v.get("fish_temperature", 0.9)), "top_p": float(v.get("fish_top_p", 0.8))}
     if v.get("fish_reference_id"):
         body["reference_id"] = str(v["fish_reference_id"])
     r = requests.post(f"{_FISH}/tts", json=body, timeout=240,
@@ -69,13 +71,20 @@ def _fish_synth(cfg: dict, text: str, out_mp3: Path) -> list[dict]:
 def _fish_align(key: str, mp3: Path, text: str) -> list[dict]:
     """Word timings from Fish ASR segments. Words of the SPOKEN text are mapped onto the transcript's segments
     by proportional position (robust to the ASR hearing '$1,200' as 'twelve hundred dollars')."""
+    if not _fish_state["asr"]:
+        return []
     try:
         with open(mp3, "rb") as fh:
             r = requests.post(f"{_FISH}/asr", headers={"Authorization": f"Bearer {key}", "model": "transcribe-1"},
                               files={"audio": ("a.mp3", fh, "audio/mpeg")}, data={"language": "en", "ignore_timestamps": "false"},
                               timeout=240)
+        if r.status_code in (401, 402, 403):
+            _fish_state["asr"] = False   # account-level: say it once, not once per section
+            print(f"[warn] Fish ASR {r.status_code}: {r.text[:110]} — word timings off for this run (captions use estimated "
+                  f"timings). Fix: top up Fish *API* credit (separate from platform credit) at fish.audio.")
+            return []
         if r.status_code != 200:
-            print(f"[warn] Fish ASR {r.status_code}: {r.text[:120]} — captions will use estimated timings")
+            print(f"[warn] Fish ASR {r.status_code}: {r.text[:120]} — this section uses estimated timings")
             return []
         segs = sorted((s for s in r.json().get("segments", []) if s.get("text", "").strip() and s["end"] > s["start"]),
                       key=lambda s: float(s["start"]))

@@ -127,7 +127,9 @@ def pick_topic(seed: int | None = None, cfg: dict | None = None, forced: str | N
         return d
 
     if forced:
-        return _finish({"category": _weighted_choice(cats, perf.get("category_scores", {})), "topic": forced, "source": "forced"})
+        # a hand-typed topic is a mechanic unless it is phrased as a story ("why is X so expensive", "how does X make money")
+        kind = "story" if re.search(r"\b(why is|why are|how does .* make money|went (broke|bankrupt)|so expensive|history of)\b", forced.lower()) else "mechanic"
+        return _finish({"category": _weighted_choice(cats, perf.get("category_scores", {})), "topic": forced, "source": "forced", "kind": kind})
 
     if cfg is not None and not _trend_recently(published, int(tcfg.get("trend_max_per_days", 7))):
         from .trends import scout

@@ -109,12 +109,13 @@ def _fade(fade: bool) -> str:
 def _drift(w: int, h: int, dur: float) -> str:
     """Per-frame slow push-in via `scale` with eval=frame (far cheaper than zoompan on video), then centre-crop.
     Even dimensions are forced so yuv420p stays happy."""
-    if dur <= 0.2:
+    if dur < 2.5:   # too short for a push-in to register; saves the per-frame rescale
         return ""
     k = f"(1+{DRIFT}*min(t/{dur:.3f}\\,1))"
     # crop freezes in_w/in_h at config time, so its default centring would be (W-W)/2 = 0 -> a top-left-anchored
     # zoom (content sliding toward the corner). Recompute the centre from the same t-formula instead.
-    return (f",scale=w='trunc(iw*{k}/2)*2':h='trunc(ih*{k}/2)*2':eval=frame,"
+    # fast_bilinear: run #16 showed bicubic per-frame rescaling doubled render time; at a 5% zoom the difference is invisible.
+    return (f",scale=w='trunc(iw*{k}/2)*2':h='trunc(ih*{k}/2)*2':eval=frame:flags=fast_bilinear,"
             f"crop={w}:{h}:x='(trunc(in_w*{k}/2)*2-in_w)/2':y='(trunc(in_h*{k}/2)*2-in_h)/2',setsar=1")
 
 

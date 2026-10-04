@@ -297,22 +297,39 @@ def _validate(d: dict, cfg: dict) -> None:
 
 # ------------------------------------------------------------------ delivery cues (Fish Audio S2 bracket syntax)
 
-_CUE_RE = re.compile(r"\[[^\]]{1,40}\]|\((?:break|long-break|breath)\)")
+_CUE_RE = re.compile(r"\[[^\]]{1,60}\]|\((?:break|long-break|breath)\)")
 
 DELIVERY_SYSTEM = """You are a voice director marking up a finance explainer for the Fish Audio S2 text-to-speech model.
 You add DELIVERY CUES in square brackets to the narration. The cues shape how a line is spoken; the words never change.
-Syntax (S2): a sentence-level cue goes at the START of a sentence and colours that sentence: [curious] [confident] [surprised]
-[worried] [calm] [soft tone] [slightly amused] [determined] [in a hurry tone] — natural-language phrases are allowed.
-[emphasis] goes IMMEDIATELY BEFORE the word or number to stress. [break] is a short pause, [long-break] a longer one; they
-go between sentences or right before a reveal.
-Rules — a flat read is the enemy, but so is a caricature:
-- At most ONE sentence-level cue per sentence, and only on 1 sentence in 3 or 4; let the others ride on the previous mood.
-- Every section opens with a sentence-level cue (set the mood), then at most 2 more in that section.
-- [emphasis] on the single most important number or word in each section — never more than 2 per section.
-- A [break] before each reveal or punchline (the sentence that delivers the surprising number), roughly once per section.
-- Never use laughing/sighing/crying/shouting/whispering/screaming effects. No [narrator]. No cues inside a number.
+S2 reads bracket cues as natural-language stage directions, so be PHYSICAL and SPECIFIC — describe pace, volume, breath
+and attitude, not just a mood word. Good cues:
+  [leaning in, quieter and slower]   [picking up pace, energised]   [flat and matter-of-fact, then a beat of silence]
+  [genuinely surprised, eyebrows up]  [dry, half-smiling]   [slow and heavy on every word]   [warm, reassuring]
+  [almost whispering the number]     [brisk, like listing items]   [sceptical, drawn out]   [building, louder]
+Weak cues (avoid): [calm] [confident] [neutral] [serious] — a flat reference voice ignores them.
+Position: a cue goes at the START of the sentence it colours. [emphasis] goes IMMEDIATELY BEFORE the word or number to
+stress. (break) is a short pause, [long-break] a longer one; put them right BEFORE a reveal, after a question, or after a
+short punch sentence.
+Density — {density_rules}
+Always:
+- Keep each cue SHORT (2-5 words). Never stack two cues on one sentence: over-direction makes the voice re-plan its
+  prosody every sentence and the joins sound robotic.
+- Every section opens with a cue that changes the energy from the previous section.
+- (break) only right before a sentence that delivers a surprising number; [long-break] at most once per section.
+- The sign-off sentence gets [warm, unhurried].
+- Never use laughing/sighing/crying/shouting/screaming effects. No [narrator]. No cues inside a number or between a
+  currency sign and its digits.
 - Do NOT alter, reorder, add or remove any word or punctuation. Output must equal the input once cues are stripped.
 Return ONLY JSON: {"sections": [{"id": "...", "spoken": "..."}], "shorts": [{"index": 0, "spoken": "..."}]}"""
+
+_DENSITY = {
+    "low": ("a cue on roughly 1 sentence in 4; [emphasis] on ONE number per section; let the voice carry the rest "
+            "(use this when the reference voice is already expressive)."),
+    "medium": ("a cue on roughly 1 sentence in 2-3, alternating energy (fast/slow, loud/quiet, warm/dry) so the read "
+               "never settles into one gear; [emphasis] on the 1-2 numbers that matter most in each section."),
+    "high": ("a cue on roughly every second sentence, alternating energy; [emphasis] before every key number. "
+             "Use only for a very flat reference voice — this setting can sound over-directed."),
+}
 
 
 def _clean(text: str) -> str:
@@ -328,8 +345,10 @@ def annotate_delivery(cfg: dict, script: dict) -> int:
     user = ("Mark up these narrations.\n\nSECTIONS:\n" +
             "\n\n".join(f"[id={s['id']}]\n{s['narration']}" for s in secs) +
             "\n\nSHORTS:\n" + "\n\n".join(f"[index={i}]\n{sh['narration']}" for i, sh in enumerate(shorts)))
+    density = str(cfg.get("voice", {}).get("cue_density", "medium")).lower()
+    system = DELIVERY_SYSTEM.replace("{density_rules}", _DENSITY.get(density, _DENSITY["medium"]))
     try:
-        data = ask_json(cfg, DELIVERY_SYSTEM, user, temperature=0.4)
+        data = ask_json(cfg, system, user, temperature=0.4)
     except Exception as e:  # noqa: BLE001 - cues are a bonus
         print(f"[warn] delivery pass failed ({str(e)[:100]}); narration will be read without cues")
         return 0
@@ -348,7 +367,7 @@ def annotate_delivery(cfg: dict, script: dict) -> int:
             accepted += 1
     total = len(secs) + len(shorts)
     cues = sum(len(_CUE_RE.findall(x.get("spoken", ""))) for x in secs + shorts)
-    print(f"      delivery cues: {accepted}/{total} parts annotated, {cues} cues" +
+    print(f"      delivery cues ({density}): {accepted}/{total} parts annotated, {cues} cues" +
           ("" if accepted == total else " (rejected parts had altered words; they will be read plain)"))
     return accepted
 
