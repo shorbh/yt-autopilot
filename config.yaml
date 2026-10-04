@@ -23,7 +23,7 @@ voice:
   # --- Fish Audio (FISH_API_KEY). s2.1-pro-free = production model at $0; word timings via Fish ASR ($0.36/audio hour) ---
   fish_model: "s2.1-pro-free"
   fish_reference_id: "5c8dc6a69c0b4edfb32634db6384bf34"      # voice id from fish.audio/app/discovery (pick an English narrator); empty = Fish's default voice
-  fish_speed: 1.0
+  fish_speed: 0.96           # a touch under 1.0: explaining, not reading. Breath-group pauses are added in tts.py (PAUSE_S)
   fish_temperature: 0.85     # 0.7 = Fish default (steadier, flatter); ~0.9 = more intonation variety; >1.0 risks artefacts
   fish_top_p: 0.8
   cue_density: "medium"      # low | medium | high — how often the delivery pass adds [bracket] cues. Playground test (Oct 4):
@@ -37,7 +37,7 @@ voice:
   elevenlabs_speed: 1.05
   # --- edge-tts (free fallback) ---   Run: python -m edge_tts --list-voices | findstr en-US
   name: "en-US-AndrewMultilingualNeural"   # calm male; alt: en-US-AvaMultilingualNeural, en-GB-RyanNeural
-  rate: "+4%"
+  rate: "+0%"
   pitch: "+0Hz"
 
 video:

@@ -50,24 +50,52 @@ _GLOWS = [  # (ellipse box as fractions of w/h, colour) — three variants
 ]
 
 
-def _base(cfg: dict, w: int, h: int, alt: bool = False, variant: int = 0) -> Image.Image:
-    """Background + brand tag. Rendered once per (size, variant) and copied per frame."""
+BRIGHT_BG = ("#FFD166", "#FFC43D")      # the thumbnail's yellow world, used INSIDE the video for reveals and map cards
+BRIGHT_TEXT = (20, 20, 30)
+NAVY = (11, 16, 32)
+
+
+def _pal(cfg: dict, theme: str | None) -> dict:
+    """Colours for a card theme. dark = brand navy (default); bright = yellow with navy type."""
     st = cfg["style"]
+    if theme == "bright":
+        return {"text": BRIGHT_TEXT, "accent": NAVY, "accent2": (200, 40, 60), "muted": (70, 60, 40), "bg": (255, 209, 102)}
+    return {"text": hex_to_rgb(st["text"]), "accent": hex_to_rgb(st["accent"]), "accent2": hex_to_rgb(st["accent2"]),
+            "muted": (190, 200, 225), "bg": NAVY}
+
+
+def _base(cfg: dict, w: int, h: int, alt: bool = False, variant: int = 0, theme: str | None = None) -> Image.Image:
+    """Background + brand tag. Rendered once per (size, variant, theme) and copied per frame.
+    theme='transparent' returns an RGBA canvas with no background (for cards composited over footage)."""
+    st = cfg["style"]
+    if theme == "transparent":
+        return Image.new("RGBA", (w, h), (0, 0, 0, 0))
     variant %= len(_GLOWS)
-    key = (w, h, alt, variant, st["bg_dark"], st["bg_dark2"])
+    key = (w, h, alt, variant, theme, st["bg_dark"], st["bg_dark2"])
     with _BASE_LOCK:
         img = _BASE_CACHE.get(key)
         if img is None:
-            c1, c2 = (st["bg_dark2"], st["bg_dark"]) if alt else (st["bg_dark"], st["bg_dark2"])
-            img = gradient(w, h, c1, c2, noise=False)
-            box, col = _GLOWS[variant]
-            glow = Image.new("RGB", (w, h), (0, 0, 0))
-            ImageDraw.Draw(glow).ellipse([box[0] * w, box[1] * h, box[2] * w, box[3] * h], fill=col)
-            glow = glow.filter(ImageFilter.GaussianBlur(w // 8))
-            img = Image.blend(img, Image.composite(glow, img, glow.convert("L")), 0.55)
-            d = ImageDraw.Draw(img)
-            d.text((w * 0.97, h * 0.965), cfg["channel"]["name"].upper(), font=font(cfg, int(min(w, h) * 0.022)),
-                   fill=(150, 160, 190), anchor="rm")
+            if theme == "bright":
+                img = gradient(w, h, BRIGHT_BG[0], BRIGHT_BG[1], noise=False)
+                glow = Image.new("RGB", (w, h), (0, 0, 0))
+                box = _GLOWS[variant][0]
+                ImageDraw.Draw(glow).ellipse([box[0] * w, box[1] * h, box[2] * w, box[3] * h], fill=(255, 245, 200))
+                glow = glow.filter(ImageFilter.GaussianBlur(w // 8))
+                img = Image.blend(img, Image.composite(glow, img, glow.convert("L")), 0.5)
+                d = ImageDraw.Draw(img)
+                d.text((w * 0.97, h * 0.965), cfg["channel"]["name"].upper(), font=font(cfg, int(min(w, h) * 0.022)),
+                       fill=(90, 70, 30), anchor="rm")
+            else:
+                c1, c2 = (st["bg_dark2"], st["bg_dark"]) if alt else (st["bg_dark"], st["bg_dark2"])
+                img = gradient(w, h, c1, c2, noise=False)
+                box, col = _GLOWS[variant]
+                glow = Image.new("RGB", (w, h), (0, 0, 0))
+                ImageDraw.Draw(glow).ellipse([box[0] * w, box[1] * h, box[2] * w, box[3] * h], fill=col)
+                glow = glow.filter(ImageFilter.GaussianBlur(w // 8))
+                img = Image.blend(img, Image.composite(glow, img, glow.convert("L")), 0.55)
+                d = ImageDraw.Draw(img)
+                d.text((w * 0.97, h * 0.965), cfg["channel"]["name"].upper(), font=font(cfg, int(min(w, h) * 0.022)),
+                       fill=(150, 160, 190), anchor="rm")
             _BASE_CACHE[key] = img
     return img.copy()
 
@@ -77,6 +105,16 @@ def _save_frames(frames: list[Image.Image], out_dir: Path) -> tuple[Path, int]:
     for i, fr in enumerate(frames):
         fr.save(out_dir / f"{i:04d}.png", "PNG", compress_level=1)
     return out_dir, len(frames)
+
+
+def _fade_col(col, a: float, theme: str | None):
+    """Colour at alpha `a` for a theme: blends toward the card background (opaque themes) or returns the colour
+    unchanged for transparent cards (there is no background to blend toward; the clip itself pops in)."""
+    if theme == "transparent":
+        return col
+    if theme == "bright":
+        return _mix(col, a, (255, 209, 102))
+    return _mix(col, a)
 
 
 # ------------------------------------------------------------------ text fitting (the clipping fix)
@@ -222,77 +260,147 @@ def _paste_icon(img: Image.Image, name: str | None, size: int, color, cx: float,
         a = ic.split()[3].point(lambda v: int(v * alpha))
         ic = ic.copy()
         ic.putalpha(a)
-    img.paste(ic, (int(cx - size / 2), int(cy - size / 2)), ic)
+    pos = (int(cx - size / 2), int(cy - size / 2))
+    if img.mode == "RGBA":
+        img.alpha_composite(ic, pos)          # paste() on a transparent canvas would darken the icon (per-channel lerp)
+    else:
+        img.paste(ic, pos, ic)
     return True
 
 
 # ------------------------------------------------------------------ renderers
 
 def bignumber(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
-    st = cfg["style"]
+    theme = spec.get("theme")                      # None (navy) | "bright" (yellow reveal) | "transparent" (over footage)
+    pal = _pal(cfg, theme)
     value, label = str(spec.get("value") or ""), str(spec.get("label") or "")
+    stroke = max(3, int(min(w, h) * 0.006)) if theme == "transparent" else 0
     n = int(ANIM_FPS * 1.6)
     frames = []
     for i in range(n + 1):
         t = i / n
-        img = _base(cfg, w, h, variant=variant)
+        img = _base(cfg, w, h, variant=variant, theme=theme)
         d = ImageDraw.Draw(img)
         vf = _fit_font(cfg, d, value, w * 0.86, int(min(w, h) * (0.24 if w > h else 0.17)))
         scale = 0.85 + 0.15 * _ease(t)
-        d.text((w / 2, h * 0.47), _animate_number(value, t), font=font(cfg, int(vf.size * scale)), fill=hex_to_rgb(st["accent2"]), anchor="mm")
+        d.text((w / 2, h * 0.47), _animate_number(value, t), font=font(cfg, int(vf.size * scale)), fill=pal["accent2"], anchor="mm",
+               stroke_width=stroke * 2, stroke_fill=(0, 0, 0) if stroke else None)
         if t > 0.35:
             a = _ease((t - 0.35) / 0.65)
             draw_fit(cfg, d, label, (w * 0.1, h * 0.47 + vf.size * 0.65, w * 0.9, h * 0.9), int(vf.size * 0.26),
-                     _mix(hex_to_rgb(st["text"]), a), align="center", max_lines=2)
+                     _fade_col(pal["text"], a, theme), align="center", max_lines=2, stroke=stroke)
         isz = int(min(w, h) * 0.11)
-        _paste_icon(img, spec.get("icon"), isz, hex_to_rgb(st["accent"]), w / 2, h * TOP_SAFE + isz * 0.7, alpha=_ease(t))
+        _paste_icon(img, spec.get("icon"), isz, pal["accent"], w / 2, h * TOP_SAFE + isz * 0.7, alpha=_ease(t))
         frames.append(img)
     return _save_frames(frames, out_dir)
 
 
 def callout(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
-    st = cfg["style"]
+    theme = spec.get("theme")
+    pal = _pal(cfg, theme)
     text = str(spec.get("text") or "")
+    stroke = max(3, int(min(w, h) * 0.006)) if theme == "transparent" else 0
     n = int(ANIM_FPS * 0.7)
     frames = []
     for i in range(n + 1):
         t = _ease(i / n)
-        img = _base(cfg, w, h, alt=True, variant=variant)
+        img = _base(cfg, w, h, alt=True, variant=variant, theme=theme)
         d = ImageDraw.Draw(img)
         size = int(min(w, h) * (0.075 if w > h else 0.06))
         fnt, lines, lh = fit_text_box(cfg, d, text, w * 0.78, h * 0.5, size, max_lines=4)
         total = len(lines) * lh
         y0 = h / 2 - total / 2 + size * 0.1
         bar_w = int(w * 0.18 * t)
-        d.rectangle([w / 2 - bar_w / 2, y0 - size * 0.6, w / 2 + bar_w / 2, y0 - size * 0.5], fill=hex_to_rgb(st["accent"]))
-        col = _mix(hex_to_rgb(st["text"]), t, (20, 27, 55))
+        d.rectangle([w / 2 - bar_w / 2, y0 - size * 0.6, w / 2 + bar_w / 2, y0 - size * 0.5], fill=pal["accent"])
+        col = _fade_col(pal["text"], t, theme) if theme else _mix(pal["text"], t, (20, 27, 55))
         for k, line in enumerate(lines):
-            d.text((w / 2, y0 + k * lh + lh / 2), line, font=fnt, fill=col, anchor="mm")
+            d.text((w / 2, y0 + k * lh + lh / 2), line, font=fnt, fill=col, anchor="mm",
+                   stroke_width=stroke, stroke_fill=(0, 0, 0) if stroke else None)
         frames.append(img)
     return _save_frames(frames, out_dir)
 
 
 def icon_text(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
     """Big Lucide icon + short phrase. Falls back to a callout look if the icon is unavailable."""
-    st = cfg["style"]
+    theme = spec.get("theme")
+    pal = _pal(cfg, theme)
     text = str(spec.get("text") or "")
     name = spec.get("icon")
     portrait = h > w
     if not name or assets_remote.icon(name, 64, (255, 255, 255)) is None:
-        return callout(cfg, {"text": text}, w, h, out_dir, variant)
+        return callout(cfg, {"text": text, "theme": theme}, w, h, out_dir, variant)
+    stroke = max(3, int(min(w, h) * 0.006)) if theme == "transparent" else 0
     n = int(ANIM_FPS * 0.9)
     frames = []
     for i in range(n + 1):
         t = _ease(i / n)
-        img = _base(cfg, w, h, variant=variant)
+        img = _base(cfg, w, h, variant=variant, theme=theme)
         d = ImageDraw.Draw(img)
         isz = int(min(w, h) * (0.26 if not portrait else 0.22) * (0.8 + 0.2 * t))
         if portrait:
-            _paste_icon(img, name, isz, hex_to_rgb(st["accent"]), w / 2, h * 0.36, alpha=t)
-            draw_fit(cfg, d, text, (w * 0.1, h * 0.5, w * 0.9, h * 0.72), int(w * 0.075), _mix(hex_to_rgb(st["text"]), t), align="center", max_lines=4)
+            _paste_icon(img, name, isz, pal["accent"], w / 2, h * 0.36, alpha=t)
+            draw_fit(cfg, d, text, (w * 0.1, h * 0.5, w * 0.9, h * 0.72), int(w * 0.075), _fade_col(pal["text"], t, theme), align="center", max_lines=4, stroke=stroke)
         else:
-            _paste_icon(img, name, isz, hex_to_rgb(st["accent"]), w * 0.27, h * 0.5, alpha=t)
-            draw_fit(cfg, d, text, (w * 0.46 - (1 - t) * w * 0.03, h * 0.28, w * 0.92, h * 0.72), int(h * 0.085), _mix(hex_to_rgb(st["text"]), t), valign="middle", max_lines=4)
+            _paste_icon(img, name, isz, pal["accent"], w * 0.27, h * 0.5, alpha=t)
+            draw_fit(cfg, d, text, (w * 0.46 - (1 - t) * w * 0.03, h * 0.28, w * 0.92, h * 0.72), int(h * 0.085), _fade_col(pal["text"], t, theme), valign="middle", max_lines=4, stroke=stroke)
+        frames.append(img)
+    return _save_frames(frames, out_dir)
+
+
+_TILE_COLS = [(255, 90, 95), (61, 220, 151), (80, 140, 255), (255, 150, 60), (170, 100, 255), (40, 200, 220), (255, 110, 170), (120, 200, 80)]
+
+
+def map_grid(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
+    """Progress map for MAP videos: the thumbnail's labelled icon grid, inside the video. The current item pops
+    (scale + navy outline), finished items are dimmed, upcoming ones sit flat. Shown at every section start so
+    the viewer always knows 'we are on 4 of 7' — the structure becomes visible."""
+    items = [it for it in (spec.get("items") or []) if isinstance(it, dict) and it.get("label")][:8]
+    cur = int(spec.get("current", -1))
+    title = str(spec.get("title") or "")
+    portrait = h > w
+    n_items = len(items)
+    cols = 2 if (portrait or n_items <= 4) else (3 if n_items <= 6 else 4)
+    rows = max(1, -(-n_items // cols))
+    top = int(h * (TOP_SAFE + 0.02)) if not portrait else int(h * (TOP_SAFE + 0.04))
+    if title:
+        top += int(min(w, h) * 0.09)
+    bottom, side, gap = int(h * 0.92), int(w * 0.05), int(min(w, h) * 0.02)
+    tw = (w - 2 * side - (cols - 1) * gap) // cols
+    th = (bottom - top - (rows - 1) * gap) // rows
+    n = int(ANIM_FPS * 0.8)
+    frames = []
+    for fi in range(n + 1):
+        t = _ease(fi / n)
+        img = _base(cfg, w, h, variant=variant, theme="bright")
+        d = ImageDraw.Draw(img)
+        if title:
+            tf = _fit_font(cfg, d, title.upper(), w * 0.86, int(min(w, h) * 0.075), floor=int(min(w, h) * 0.04))
+            d.text((w / 2, int(h * (TOP_SAFE + 0.02)) + tf.size * 0.55 if not portrait else int(h * (TOP_SAFE + 0.04)) + tf.size * 0.55),
+                   title.upper(), font=tf, fill=BRIGHT_TEXT, anchor="mm")
+        for i, it in enumerate(items):
+            r, c = divmod(i, cols)
+            x0, y0 = side + c * (tw + gap), top + r * (th + gap)
+            col = _TILE_COLS[i % len(_TILE_COLS)]
+            done, is_cur = i < cur, i == cur
+            if done:
+                col = tuple(int(v * 0.45 + 255 * 0.55 * 0.6) for v in col)   # faded
+            s = 1.0 + 0.08 * t if is_cur else 1.0
+            cx, cy = x0 + tw / 2, y0 + th / 2
+            bx0, by0, bx1, by1 = cx - tw * s / 2, cy - th * s / 2, cx + tw * s / 2, cy + th * s / 2
+            d.rounded_rectangle([bx0, by0, bx1, by1], radius=int(min(tw, th) * 0.12), fill=col,
+                                outline=BRIGHT_TEXT, width=(8 if is_cur else 3))
+            isz = int(min(tw, th) * 0.42 * s)
+            if not _paste_icon(img, it.get("icon"), isz, BRIGHT_TEXT, cx, cy - th * 0.1 * s):
+                d.ellipse([cx - isz / 2, cy - th * 0.1 - isz / 2, cx + isz / 2, cy - th * 0.1 + isz / 2], outline=BRIGHT_TEXT, width=5)
+            label = str(it["label"]).upper()
+            lf = _fit_font(cfg, d, label, tw * 0.9, int(th * 0.18), floor=int(th * 0.1))
+            d.text((cx, by1 - th * 0.17 * s), label, font=lf, fill=(255, 255, 255), anchor="mm",
+                   stroke_width=max(2, lf.size // 9), stroke_fill=BRIGHT_TEXT)
+            if done:   # drawn tick (font-independent) in a navy badge, top-right of the tile
+                ck = int(min(tw, th) * 0.16)
+                d.ellipse([bx1 - ck * 1.3, by0 + ck * 0.3, bx1 - ck * 0.3, by0 + ck * 1.3], fill=BRIGHT_TEXT)
+                d.line([(bx1 - ck * 1.05, by0 + ck * 0.82), (bx1 - ck * 0.86, by0 + ck * 1.02), (bx1 - ck * 0.55, by0 + ck * 0.6)],
+                       fill=(255, 255, 255), width=max(3, ck // 8), joint="curve")
         frames.append(img)
     return _save_frames(frames, out_dir)
 
@@ -546,12 +654,15 @@ def hook_card(cfg, spec, w, h, out_dir, photo: Path | None, variant=0) -> tuple[
     st = cfg["style"]
     text = str(spec.get("text") or "")
     if photo and Path(photo).exists():
-        base = ImageEnhance.Brightness(_cover(Image.open(photo).convert("RGB"), w, h)).enhance(0.55)
-        # extra darkening band behind the text so white type reads on any photo
+        ph = _cover(Image.open(photo).convert("RGB"), w, h)
+        ph = ImageEnhance.Contrast(ImageEnhance.Brightness(ph).enhance(0.6)).enhance(1.25)   # punchier, not foggy
+        ph = ImageEnhance.Color(ph).enhance(1.15)
+        # full-frame navy tint (keeps bright photos from washing out) + a darker band behind the text
+        base = Image.blend(ph, Image.new("RGB", (w, h), (11, 16, 32)), 0.35)
         band = Image.new("L", (w, h), 0)
         bd = ImageDraw.Draw(band)
         for y in range(int(h * 0.22), int(h * 0.7)):
-            bd.line([(0, y), (w, y)], fill=int(140 * (1 - abs((y - h * 0.46) / (h * 0.24)) ** 2)))
+            bd.line([(0, y), (w, y)], fill=int(150 * (1 - abs((y - h * 0.46) / (h * 0.24)) ** 2)))
         base = Image.composite(Image.new("RGB", (w, h), (11, 16, 32)), base, band)
     else:
         base = _base(cfg, w, h, variant=variant)
@@ -600,7 +711,7 @@ def chart_progressive(cfg, chart: dict, w, h, out_dir) -> tuple[Path, int] | Non
 
 def chapter_card(cfg, heading: str, index: int, w, h, out_dir) -> tuple[Path, int]:
     st = cfg["style"]
-    n = int(ANIM_FPS * 0.5)   # the card is on screen for render.CHAPTER_SECS (0.6 s); animation must finish inside that
+    n = int(ANIM_FPS * 0.8)   # the card is on screen for render.CHAPTER_SECS (1.1 s); animation must finish inside that
     frames = []
     for i in range(n + 1):
         t = _ease(i / n)

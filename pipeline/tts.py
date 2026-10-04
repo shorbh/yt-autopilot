@@ -313,17 +313,71 @@ def synthesize(cfg: dict, text: str, out_mp3: Path, retries: int = 3, provider: 
     raise RuntimeError(f"edge-tts failed: {last}")
 
 
+_SENT_SPLIT = re.compile(r"(?<=[.!?])\s+(?=(?:\[[^\]]*\]\s*|\(break\)\s*|\(long-break\)\s*)*[A-Z0-9\"'$])")
+PAUSE_S = 0.55          # silence between sentence groups inside a section — a person breathes; a reader doesn't
+GROUP_WORDS = 38        # ~2-3 sentences per breath group
+
+
+def _groups(text: str) -> list[str]:
+    """Split narration into breath groups of 2-3 sentences (<= GROUP_WORDS words). Cues stay attached to their sentence."""
+    sents = [s.strip() for s in _SENT_SPLIT.split(" ".join(str(text).split())) if s.strip()]
+    groups, cur, n = [], [], 0
+    for s in sents:
+        wc = len(_TAG_RE.sub(" ", s).split())
+        if cur and (n + wc > GROUP_WORDS or len(cur) >= 3):
+            groups.append(" ".join(cur))
+            cur, n = [], 0
+        cur.append(s)
+        n += wc
+    if cur:
+        groups.append(" ".join(cur))
+    return groups or [str(text)]
+
+
+def synthesize_paced(cfg: dict, text: str, out_mp3: Path, provider: str) -> dict:
+    """Synthesize `text` as breath groups with PAUSE_S of silence between them, concatenated into one mp3.
+    Word timings are shifted into the combined timeline. Falls back to a single synthesis on any failure."""
+    groups = _groups(text)
+    if len(groups) == 1:
+        return synthesize(cfg, text, out_mp3, provider=provider)
+    parts, words, offset = [], [], 0.0
+    try:
+        for gi, g in enumerate(groups):
+            p = out_mp3.with_name(f"{out_mp3.stem}_g{gi:02d}.mp3")
+            info = synthesize(cfg, g, p, provider=provider)
+            if info.get("provider") != provider:
+                raise RuntimeError("provider changed mid-section")   # -> whole section re-synthesised in one consistent voice
+            for w in info["words"]:
+                words.append({**w, "start": w["start"] + offset, "end": w["end"] + offset})
+            offset += info["duration"] + PAUSE_S
+            parts.append(p)
+        inputs, filters = [], []
+        for i, p in enumerate(parts):
+            inputs += ["-i", str(p)]
+            pad = PAUSE_S if i < len(parts) - 1 else 0.0
+            filters.append(f"[{i}:a]aresample=48000,aformat=channel_layouts=mono,apad=pad_dur={pad:.3f}[a{i}]")  # concat needs equal formats
+        joined = "".join(f"[a{i}]" for i in range(len(parts)))
+        fc = ";".join(filters) + f";{joined}concat=n={len(parts)}:v=0:a=1[out]"
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *inputs, "-filter_complex", fc, "-map", "[out]",
+                        "-c:a", "libmp3lame", "-q:a", "2", str(out_mp3)], check=True)
+        return {"duration": ffprobe_duration(out_mp3), "words": words, "provider": provider}
+    except Exception as e:  # noqa: BLE001 - never lose a video over pacing
+        print(f"[warn] paced synthesis failed ({str(e)[:100]}); synthesising the section in one piece")
+        return synthesize(cfg, text, out_mp3, provider=provider)
+
+
 def synthesize_sections(cfg: dict, sections: list[dict], workdir: Path) -> list[dict]:
     """One mp3 per section so we know exact per-section durations. Adds 'audio','duration','words'.
     The provider is chosen ONCE for the whole video so the voice never changes between sections."""
     from concurrent.futures import ThreadPoolExecutor
     provider = provider_for(cfg, sum(len(s["narration"]) for s in sections))
-    print(f"      voice: {provider}" + (" (with delivery cues)" if provider == "fish" and any(s.get("spoken") for s in sections) else ""))
+    print(f"      voice: {provider}" + (" (with delivery cues)" if provider == "fish" and any(s.get("spoken") for s in sections) else "")
+          + f", paced in breath groups ({PAUSE_S}s pauses)")
 
     def _one(i_s):
         i, s = i_s
         mp3 = workdir / f"sec_{i:02d}.mp3"
-        info = synthesize(cfg, spoken_text(s, provider), mp3, provider=provider)
+        info = synthesize_paced(cfg, spoken_text(s, provider), mp3, provider)
         return {**s, "audio": str(mp3), "duration": info["duration"], "words": info["words"]}
 
     # 3 concurrent requests: fast, but gentle enough not to trip rate limiting on either provider.

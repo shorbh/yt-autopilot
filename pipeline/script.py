@@ -34,6 +34,11 @@ Retention rules (these decide whether the algorithm recommends the video):
 - Any named person keeps the same name, gender and pronouns throughout; state gender implicitly via pronouns.
 
 Write for the EAR, not the page (a synthetic voice reads this; the words must carry the feeling):
+- SIGNPOST. Every section s1..s5 OPENS with a 2-6 word spoken signpost sentence that tells the listener where we are
+  ("Okay. Number two: bonds." / "Now the part most people skip." / "Here's where it gets interesting."). The hook
+  ENDS with a one-line roadmap ("Seven types, safest first. Let's go."). The close opens with "So, the rule:" or similar.
+- LAND the point. After the key number in each section, one short sentence that says what it means in plain words,
+  then move on. Never run two ideas together in one sentence.
 - Vary sentence length on purpose: after a long sentence, a short one. Four words. Then build again.
 - Talk to "you". One rhetorical question per section, answered immediately. One dry aside per video, never more.
 - Put the surprising number at the END of its sentence, where the voice lands on it.
@@ -224,10 +229,32 @@ _ACRONYMS = {"ira", "iras", "etf", "etfs", "hsa", "apr", "apy", "hysa", "fdic", 
 _QWORDS = ("how", "why", "what", "when", "should", "is", "can", "do", "does", "which", "are", "will")
 
 
+_NUM_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+              "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100}
+
+
+def numerals(text: str) -> str:
+    """On-screen/metadata text uses symbols: '90 percent' -> '90%', 'versus' -> 'vs', 'forty percent' -> '40%',
+    'two hundred dollars' -> '$200'. (The narration keeps spelled-out numbers for the voice; this is for titles,
+    hook cards and key facts.)"""
+    t = str(text)
+    words = "|".join(_NUM_WORDS)
+    tens = "twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
+    t = re.sub(r"\b(a|an|" + words + r") hundred (thousand )?dollars\b",
+               lambda m: f"${_NUM_WORDS.get(m.group(1).lower(), 1)}00{',000' if m.group(2) else ''}", t, flags=re.I)
+    t = re.sub(r"\b(" + tens + r")-(one|two|three|four|five|six|seven|eight|nine) percent\b",
+               lambda m: f"{_NUM_WORDS[m.group(1).lower()] + _NUM_WORDS[m.group(2).lower()]}%", t, flags=re.I)
+    t = re.sub(r"(?<!-)\b(" + words + r") percent\b", lambda m: f"{_NUM_WORDS[m.group(1).lower()]}%", t, flags=re.I)
+    t = re.sub(r"(\d)\s*percent\b", r"\1%", t, flags=re.I)
+    t = re.sub(r"\bversus\b", "vs", t, flags=re.I)
+    t = re.sub(r"\b(\d[\d,]*) dollars\b", r"$\1", t, flags=re.I)
+    return t
+
+
 def headline(title: str) -> str:
     """Search-query titles arrive as the raw lowercase query ('how much house can i afford with 75k salary').
     Make it a headline: Title Case (small words lower), 'i' -> 'I', 75k -> $75K, '?' on questions."""
-    t = " ".join(str(title).split())
+    t = numerals(" ".join(str(title).split()))
     if not t:
         return t
     t = re.sub(r"\b(401|403|457)k\b", r"\1(k)", t, flags=re.I)             # retirement plans, not dollars
@@ -270,7 +297,7 @@ def _validate(d: dict, cfg: dict) -> None:
         cut = hook[:157]
         hook = cut[: cut.rfind(" ")].rstrip(",;:") + "…"
     # key facts are for skimmers and search: keep only items that carry a number; slogans add nothing
-    facts = [str(x).strip(" -•·") for x in (d.get("key_facts") or []) if str(x).strip() and re.search(r"\d", str(x))][:5]
+    facts = [numerals(str(x).strip(" -•·")) for x in (d.get("key_facts") or []) if str(x).strip() and re.search(r"\d", str(x))][:5]
     if len(facts) < 2:
         facts = []
     tags_ = []
@@ -315,7 +342,7 @@ def _validate(d: dict, cfg: dict) -> None:
     d["tags"] = [t[:30] for t in d["tags"]][:25]
     d["shorts"] = d["shorts"][: cfg["shorts"]["count"]]
     for sh in d["shorts"]:
-        sh["hook_title"] = " ".join(str(sh.get("hook_title") or d["title"]).split()[:8])[:48]
+        sh["hook_title"] = numerals(" ".join(str(sh.get("hook_title") or d["title"]).split()[:8]))[:48]
         sh["hook_face"] = str(sh.get("hook_face") or "surprised person portrait")[:40]
     for s in d["sections"]:
         s.setdefault("stat", None)

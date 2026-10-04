@@ -16,8 +16,9 @@ import re
 from .llm import ask_json
 
 VISUAL_TYPES = ("bignumber", "compare", "list", "formula", "callout", "chart", "timeline", "broll",
-                "icon_text", "photo_text", "character")
+                "icon_text", "photo_text", "footage_text", "character")
 MAX_CALLOUT_SHARE = 0.25   # plain text cards may be at most a quarter of all beats
+MAX_TYPE_SHARE = 0.40      # no single card layout (icon_text / bignumber / photo_text) above 40% of beats
 
 # Lucide icon names the storyboard may use (all verified to exist in lucide-static).
 ICONS = (
@@ -58,6 +59,10 @@ each sentence is spoken. Rules:
 - Vary the LAYERS so the video is never text-only. Mix these across each section:
     icon_text    = a concept statement (<= 10 words) + one icon from the allowed list, e.g. "A grant is a promise" + "handshake".
     photo_text   = scene-setting or emotional sentence: short phrase + a 2-4 word stock-photo query (objects/places, no faces).
+    footage_text = like photo_text but over MOVING stock footage ("query": 2-4 words, e.g. "city traffic timelapse",
+                   "hands counting cash", "stock ticker screen"). Use for about 1 beat in 4 — real motion is what keeps
+                   a card-based video from feeling like slides. Any bignumber may also add "footage": "<query>" to
+                   count up over footage instead of a flat card; do this for the section's most dramatic number.
     character    = ONLY for FICTIONAL or generic people invented by the script ("Sarah, 30, earns...", "imagine an investor
                    who..."): give character {name, gender, mood}; it is rendered as a stock portrait photo chosen from gender
                    and mood. NEVER for a real, named person, official, economist, CEO, company or institution — a stock face
@@ -68,7 +73,7 @@ each sentence is spoken. Rules:
     compare      = two people or two options; when the sides are people add "character" to each side instead of "icon"
                    (people are shown as initial avatars there).
     callout      = a rule or punchline, <= 12 words. Use SPARINGLY: at most 1 in 4 beats.
-    broll        = ONLY for transitions with no data (max 15% of beats).
+    broll        = footage with only the key phrase; for transitions with no data.
   Never put two visuals of the same type back to back; alternate text-heavy cards with image cards.
 - The FIRST beat of the 'hook' section must be a visual card (bignumber if the sentence has a number, otherwise
   photo_text or character) — never a callout. The first 3 seconds decide whether the viewer stays.
@@ -90,6 +95,8 @@ SCHEMA = """{
         {"from": 5, "to": 6, "visual": {"type": "list", "title": "Three things that vest", "items": ["25% after year one", "Monthly after that", "Nothing if you leave early"], "icons": ["calendar", "repeat", "door-open"]}},
         {"from": 7, "to": 7, "visual": {"type": "formula", "lines": ["$500 × 12 × 30 = $180,000 invested", "at 7% → $452,000"]}},
         {"from": 8, "to": 8, "visual": {"type": "photo_text", "text": "The offer letter lands", "query": "signed contract desk"}},
+        {"from": 8, "to": 8, "visual": {"type": "footage_text", "text": "Rent is due on the first", "query": "city apartments timelapse"}},
+        {"from": 8, "to": 8, "visual": {"type": "bignumber", "value": "$200,000", "label": "Extra interest over 30 years", "footage": "suburban house exterior"}},
         {"from": 9, "to": 9, "visual": {"type": "callout", "text": "Fees compound against you."}},
         {"from": 10, "to": 10, "visual": {"type": "chart"}},
         {"from": 11, "to": 11, "visual": {"type": "timeline", "items": [{"when": "Year 1", "what": "25% vests"}, {"when": "Year 2-4", "what": "monthly vesting"}]}},
@@ -142,7 +149,8 @@ _KEYWORDS = [
 
 
 def _keyword_visual(sentence: str, k: int) -> dict:
-    """Pick an icon_text (even k) or photo_text (odd k) card whose icon/photo matches the sentence."""
+    """Pick an icon_text (even k) or an image card (odd k: alternating footage_text / photo_text) whose icon/footage
+    matches the sentence. Footage first — motion is what the edit lacks most."""
     low = " " + sentence.lower() + " "
     icon, query = "lightbulb", "finance desk notebook"
     for keys, (ic, q) in _KEYWORDS:
@@ -152,7 +160,7 @@ def _keyword_visual(sentence: str, k: int) -> dict:
     phrase = _key_phrase(sentence)
     if k % 2 == 0:
         return {"type": "icon_text", "text": phrase, "icon": icon}
-    return {"type": "photo_text", "text": phrase, "query": query}
+    return {"type": "footage_text" if (k // 2) % 2 == 0 else "photo_text", "text": phrase, "query": query}
 
 
 _NUM_IN_TEXT = re.compile(r"(\$\s?[\d,]+(?:\.\d+)?\s*(?:k|K|m|M|million|billion|thousand)?|[\d,]+(?:\.\d+)?\s*(?:%|percent|years?|months?|dollars?))")
@@ -185,13 +193,24 @@ def _diversify(beats: list[dict], first_is_hook: bool = False) -> list[dict]:
             beats[0]["visual"] = {"type": "bignumber", "value": m.group(1).strip(), "label": _key_phrase(beats[0]["text"], 8)}
         else:
             beats[0]["visual"] = _keyword_visual(beats[0]["text"], 1)  # photo card
+    # 5. no single card layout above MAX_TYPE_SHARE of all beats (run #18: 47% icon_text). Overflow becomes the
+    #    OTHER image card (icon_text -> photo_text, anything else -> alternating), latest beats first so the
+    #    opening keeps its planned visuals.
+    for t_cap in ("icon_text", "bignumber", "photo_text", "footage_text"):
+        allowed_t = max(2, int(len(beats) * MAX_TYPE_SHARE))
+        of_type = [b for b in beats if b["visual"].get("type") == t_cap]
+        for b in reversed(of_type[allowed_t:]):
+            want = (2 * k + 1) if t_cap == "icon_text" else (0 if t_cap in ("photo_text", "footage_text") else k % 2)
+            b["visual"] = _keyword_visual(b["text"], want)
+            k += 1
     # 4. never three cards of the SAME layout in a row (run #7: five bignumbers back to back). The third
     #    becomes a keyword image card; chart/broll/character/compare are left alone (they carry their own imagery).
     for i in range(2, len(beats)):
         t0, t1, t2 = (beats[j]["visual"].get("type") for j in (i - 2, i - 1, i))
-        if t0 == t1 == t2 and t2 in ("bignumber", "callout", "icon_text", "formula", "list", "photo_text"):
+        if t0 == t1 == t2 and t2 in ("bignumber", "callout", "icon_text", "formula", "list", "photo_text", "footage_text"):
             # icon_text run -> photo card (odd k); photo_text run -> icon card (even k); anything else alternates
-            want = 1 if t2 == "icon_text" else (0 if t2 == "photo_text" else k % 2)
+            # icon run -> an image card (footage/photo alternating with k); image run -> icon; else alternate
+            want = (2 * k + 1) if t2 == "icon_text" else (0 if t2 in ("photo_text", "footage_text") else k % 2)
             beats[i]["visual"] = _keyword_visual(beats[i]["text"], want)
             k += 1
     return beats
@@ -228,9 +247,13 @@ def _clean_visual(v: dict, sentences: list[str]) -> dict:
         v["text"] = str(v.get("text") or _key_phrase(sentences[0]))[:70]
         if v.get("icon") not in ICONS:
             v["icon"] = None  # renderer degrades to a callout
-    if t == "photo_text":
+    if t in ("photo_text", "footage_text"):
         v["text"] = str(v.get("text") or _key_phrase(sentences[0]))[:70]
         v["query"] = str(v.get("query") or "finance desk")[:40]
+    if v.get("footage") is not None:
+        v["footage"] = str(v["footage"])[:40] if t in ("bignumber", "icon_text", "callout") and str(v["footage"]).strip() else None
+        if v["footage"] is None:
+            v.pop("footage", None)
     if t == "character":
         ch = v.get("character") if isinstance(v.get("character"), dict) else {"name": v.get("name"), "gender": v.get("gender"), "mood": v.get("mood")}
         if not ch.get("name"):

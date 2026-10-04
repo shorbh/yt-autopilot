@@ -21,8 +21,9 @@ from .config import ROOT, hex_to_rgb
 from .storyboard import _key_phrase, storyboard
 from .tts import _eleven_available, concat_audio, ffprobe_duration, provider_for, spoken_text, synthesize, synthesize_sections
 
-GAP = 0.35            # silence between sections (audio) — mirrored in video timing
-CHAPTER_SECS = 0.6    # chapter title card length (audio is delayed by the same amount); v5: felt, not waited through
+GAP = 0.9             # silence between sections (audio) — mirrored in video timing. v6.1: a real threshold between topics
+CHAPTER_SECS = 1.1    # chapter title card length (audio is delayed by the same amount): long enough to register as a new topic
+MAP_CARD_SECS = 1.8   # progress-map card between sections of a MAP video (the grid needs a beat to be read)
 OUTRO_SECS = 6.0      # end screen (subscribe CTA); audio is padded with silence to match
 FADE = 0.25           # fade-in on every cut
 MIN_BEAT = 1.4        # beats shorter than this are merged into the previous one
@@ -137,6 +138,27 @@ def _clip_from_frames(frames_dir: Path, n: int, dur: float, w: int, h: int, fps:
         vf += ";[bg][1:v]overlay=0:0:format=auto[v]"
     else:
         vf += ";[bg]null[v]"
+    cmd += ["-filter_complex", vf, "-map", "[v]", "-frames:v", str(_nframes(dur, fps)), "-an", *INTER, str(out)]
+    _run(cmd)
+
+
+def _clip_card_over_video(frames_dir: Path, n: int, src: Path, dur: float, w: int, h: int, fps: int,
+                          overlay: Path | None, out: Path, fade: bool = False) -> None:
+    """A transparent card (RGBA frame sequence) composited over looping, dimmed footage, then the lower third.
+    This is the 'card over footage' beat: the information stays on screen while something real is moving."""
+    anim = n / motion.ANIM_FPS
+    hold = max(0.0, dur - anim + 0.5)
+    vf = (f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+          f"eq=brightness=-0.22:saturation=0.75,fps={fps},setsar=1[bg];"
+          f"[1:v]fps={fps},tpad=stop_mode=clone:stop_duration={hold:.3f},format=rgba[card];"
+          f"[bg][card]overlay=0:0:format=auto{_fade(fade)}[v1]")
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", str(src),
+           "-framerate", str(motion.ANIM_FPS), "-i", str(frames_dir / "%04d.png")]
+    if overlay:
+        cmd += ["-i", str(overlay)]
+        vf += ";[v1][2:v]overlay=0:0:format=auto[v]"
+    else:
+        vf += ";[v1]null[v]"
     cmd += ["-filter_complex", vf, "-map", "[v]", "-frames:v", str(_nframes(dur, fps)), "-an", *INTER, str(out)]
     _run(cmd)
 
@@ -261,6 +283,32 @@ def _beat_clip(cfg: dict, beat: dict, idx: int, w: int, h: int, fps: int, workdi
                 _clip_from_frames(r[0], r[1], dur, w, h, fps, overlay, out, fade=fade)
                 return out
             vtype, vis = "callout", _callout(vis.get("text"))
+        if vtype == "footage_text" or (vtype in ("bignumber", "icon_text", "callout") and vis.get("footage")):
+            # the beat the user singled out: real moving footage with the card's information over it
+            got = broll.get(str(vis.get("footage") or vis.get("query") or "city street timelapse"), dur) \
+                if cfg["video"].get("b_roll", "auto") != "off" else None
+            if got and got[0] == "video":
+                card_type = "callout" if vtype == "footage_text" else vtype
+                spec = {**vis, "theme": "transparent"}
+                if card_type == "callout":
+                    spec["text"] = str(vis.get("text") or _key_phrase(beat["text"]))
+                fd, n = motion.RENDERERS[card_type](cfg, spec, w, h, fdir, variant=idx)
+                _clip_card_over_video(fd, n, got[1], dur, w, h, fps, overlay, out, fade=fade)
+                return out
+            if vtype == "footage_text":                       # no footage available -> photo card with the same text
+                vis = {"type": "photo_text", "text": str(vis.get("text") or _key_phrase(beat["text"])), "query": vis.get("query", "finance desk")}
+                photo = broll.photo(vis["query"]) if cfg["video"].get("b_roll", "auto") != "off" else None
+                r = motion.photo_text(cfg, vis, w, h, fdir, photo, variant=idx)
+                if r:
+                    _clip_from_frames(r[0], r[1], dur, w, h, fps, overlay, out, fade=fade)
+                    return out
+                vtype, vis = "callout", _callout(vis.get("text"))
+            else:
+                vis = {k: v for k, v in vis.items() if k != "footage"}   # fall through to the plain card
+        if vtype == "map_grid":
+            fd, n = motion.map_grid(cfg, vis, w, h, fdir, variant=idx)
+            _clip_from_frames(fd, n, dur, w, h, fps, overlay, out, fade=fade, drift=False)
+            return out
         if vtype == "character":
             photo = broll.person(vis.get("character")) if cfg["video"].get("b_roll", "auto") != "off" else None
             fd, n = motion.character(cfg, vis, w, h, fdir, photo=photo, variant=idx)
@@ -435,13 +483,18 @@ def _music_track(cfg: dict) -> Path | None:
 
 def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, out_mp4: Path,
               portrait: bool, chart: dict | None, chapters: bool,
-              beats_by_id: dict | None = None, real_people: bool = False) -> tuple[Path, list[float]]:
-    """Returns (video path, per-section start offsets in seconds)."""
+              beats_by_id: dict | None = None, real_people: bool = False,
+              map_items: list[dict] | None = None, map_title: str = "") -> tuple[Path, list[float]]:
+    """Returns (video path, per-section start offsets in seconds).
+    map_items (MAP videos): the section cards become a progress map of these items instead of plain title cards."""
     fps = cfg["video"]["fps"]
     if beats_by_id is None:
         beats_by_id = storyboard(cfg, sections, chart, real_people=real_people)
     broll = _BrollCache(workdir, portrait)
     outro = chapters and cfg["video"].get("outro", True)
+    use_map = bool(map_items) and len(map_items) >= 4 and chapters
+    card_secs = MAP_CARD_SECS if use_map else CHAPTER_SECS
+    body_sections = max(1, len(sections) - 2)          # s1..s5 carry the items; hook and close do not
     # 1) Plan every clip (cheap, sequential) ...
     jobs: list = []          # callables producing a clip path, in playback order
     offsets: list[float] = []
@@ -451,19 +504,31 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
     idx = 0
     for si, s in enumerate(sections):
         card = chapters and 0 < si < len(sections) - 1
-        lead_in.append(CHAPTER_SECS if card else 0.0)
+        lead_in.append(card_secs if card else 0.0)
         if card:
             def _chapter(si=si, s=s):
-                fd, n = motion.chapter_card(cfg, s["heading"], si, w, h, workdir / f"frames_ch{si}")
                 c = workdir / f"chapter_{si:02d}.mp4"
-                _clip_from_frames(fd, n, CHAPTER_SECS, w, h, fps, None, c, drift=False)
+                if use_map:
+                    cur = min(len(map_items) - 1, round((si - 1) * (len(map_items) - 1) / max(1, body_sections - 1)))
+                    spec = {"items": map_items, "current": cur, "title": map_title or s["heading"]}
+                    fd, n = motion.map_grid(cfg, spec, w, h, workdir / f"frames_ch{si}", variant=si)
+                else:
+                    fd, n = motion.chapter_card(cfg, s["heading"], si, w, h, workdir / f"frames_ch{si}")
+                _clip_from_frames(fd, n, card_secs, w, h, fps, None, c, drift=False)
                 return c
             jobs.append(_chapter)
-            t += CHAPTER_SECS
+            t += card_secs
         offsets.append(t)
         overlay = (visuals.lower_third(cfg, s["heading"], w, h, workdir / f"lt_{si:02d}.png", center=portrait)
                    if s.get("heading") else None)
         beats = _align_beats(s, beats_by_id.get(s["id"], []))
+        # the section's reveal (its first big number) flips to the bright theme — the thumbnail's world, inside the video
+        if si > 0:
+            for b in beats:
+                v = b["visual"]
+                if v.get("type") == "bignumber" and not v.get("footage"):
+                    v["theme"] = "bright"
+                    break
         for bi, b in enumerate(beats):
             # v5 rhythm: hard cuts within a section; a short fade only on the section's first beat
             def _beat(b=b, idx=idx, overlay=overlay, heading=s["heading"], fade=(bi == 0 and si > 0)):
@@ -572,8 +637,11 @@ def build_long_video(cfg: dict, script: dict, workdir: Path) -> dict:
     workdir.mkdir(parents=True, exist_ok=True)
     w, h = cfg["video"]["width"], cfg["video"]["height"]
     sections = synthesize_sections(cfg, script["sections"], workdir)
+    th = script.get("thumbnail") if isinstance(script.get("thumbnail"), dict) else {}
+    map_items = [i for i in (th.get("items") or []) if isinstance(i, dict) and i.get("label")] if script.get("kind") == "map" else None
     out, offsets = _assemble(cfg, sections, w, h, workdir, workdir / "long.mp4", portrait=False,
-                             chart=script.get("chart"), chapters=True, real_people=bool(script.get("real_people")))
+                             chart=script.get("chart"), chapters=True, real_people=bool(script.get("real_people")),
+                             map_items=map_items, map_title=str(th.get("map_title") or ""))
     total = ffprobe_duration(out)
     stamps = [f"{int(o // 60):02d}:{int(o % 60):02d} {s['heading']}" for s, o in zip(sections, offsets)]
     if stamps:
@@ -719,8 +787,8 @@ def _thumb_hero(cfg: dict, spec: dict, out: Path, photo: Path | None, title_text
     box_w = _TW * 0.56
     if title_text:
         text = " ".join(str(title_text).upper().split())
-        fnt, lines, lh = motion.fit_text_box(cfg, d, text, box_w, _TH * 0.56, 132, floor=68, line_spacing=1.06, max_lines=3)
-        y = _TH * 0.44 - len(lines) * lh / 2   # sits above the icon badge (bottom-left) even at three lines
+        fnt, lines, lh = motion.fit_text_box(cfg, d, text, box_w, _TH * 0.6, 132, floor=56, line_spacing=1.04, max_lines=4)
+        y = _TH * 0.42 - len(lines) * lh / 2   # sits above the icon badge (bottom-left) even at four lines
         for i, line in enumerate(lines):
             d.text((56, y + i * lh), line, font=fnt, fill=hex_to_rgb(st["accent2"]) if i == 0 else (255, 255, 255),
                    stroke_width=max(5, fnt.size // 18), stroke_fill=(0, 0, 0))

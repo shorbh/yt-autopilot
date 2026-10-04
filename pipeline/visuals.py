@@ -218,10 +218,16 @@ def lower_third(cfg: dict, text: str, w: int, h: int, out: Path, center: bool = 
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     f = font(cfg, int(min(w, h) * (0.045 if not center else 0.05)))
-    text = text if len(text) <= 36 else text[:33].rstrip() + "..."
+    # shrink first (down to ~70% size), truncate only if it still does not fit — "Cryptocurrency and Alternative As..."
+    # was being cut at 36 chars while there was plenty of room at a slightly smaller size
+    max_w = w * (0.55 if not center else 0.86)
+    floor = int(f.size * 0.7)
     tw = d.textlength(text, font=f)
-    while tw > w * 0.86 and f.size > 20:
-        f = font(cfg, f.size - 4)
+    while tw > max_w and f.size > floor:
+        f = font(cfg, f.size - 2)
+        tw = d.textlength(text, font=f)
+    while tw > max_w and len(text) > 12:
+        text = text[:-4].rstrip() + "..."
         tw = d.textlength(text, font=f)
     pad = int(h * 0.016) if not center else int(w * 0.03)
     x, y = (int(w * 0.04), int(h * 0.05)) if not center else (int(w / 2 - tw / 2 - pad - 10), int(h * 0.08))
