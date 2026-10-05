@@ -109,11 +109,10 @@ def _schema(cfg: dict, last_body: str = "s5", body_words: str = "150-220") -> st
             .replace("{body_words}", body_words).replace("{last_body}", last_body))
 
 
-# Measured on the channel with Fish at speed 0.96, breath-group pauses, chapter cards and section gaps:
-#   run 10: 920 words -> 5:40 (162 wpm, few cues)      run 20: 1,444 words -> 10:12 (142 wpm, 156 cues + 10 cards)
-# With cues capped (v6.3.1) the truth sits between; 150 keeps an 8-minute target near 8-9 minutes. Models also undershoot
-# the budget they are given, so the prompt asks for slightly more than the floor needs.
-WORDS_PER_MIN = 150
+# Measured on the channel with Fish at speed 0.96, breath-group pauses, 10 chapter cards and section gaps:
+#   run 20: 1,444 words -> 10:12 (142 wpm)   run 21: 1,228 -> 8:30 (144)   run 23: 1,414 -> 10:12 (139)
+# (run 10's 162 wpm had 5 sections and no map cards.) 140 is the planning rate; the floor is enforced by the re-draft loop.
+WORDS_PER_MIN = 140
 
 
 def target_minutes(cfg: dict) -> float:
@@ -139,7 +138,7 @@ def _section_plan(cfg: dict, pick: dict, target_words: int) -> tuple[int, str, s
                 "Never put two items in one section — the on-screen progress map highlights one item per section. "
                 "Fewer items means proportionally LONGER sections: the total word count is what must hold.")
     per = max(90, (target_words - 150) // n_body)   # hook ~80 + close ~70 come off the top
-    return n_body, f"{per}-{int(per * 1.25)}", plan, last
+    return n_body, f"{per}-{int(per * 1.15)}", plan, last   # tight upper bound: the top of the range is what the model writes to
 
 
 def generate_script(cfg: dict, pick: dict, previous: dict | None = None) -> dict:
@@ -148,7 +147,7 @@ def generate_script(cfg: dict, pick: dict, previous: dict | None = None) -> dict
     from .state import load_performance
     ch = cfg["channel"]
     minutes = target_minutes(cfg)
-    target_words = int(minutes * WORDS_PER_MIN * 1.08)   # +8%: models undershoot; the floor below is what we actually enforce
+    target_words = int(minutes * WORDS_PER_MIN)   # the re-draft loop below enforces the floor; no padding (runs 20/23 overshot to 10 min)
     floor_words = int(float(cfg["video"].get("min_minutes", 7)) * WORDS_PER_MIN)
     _, body_words, plan, last_body = _section_plan(cfg, pick, target_words)
     hints = load_performance().get("script_hints") or []
@@ -497,7 +496,8 @@ def _ensure_open_loop(cfg: dict, d: dict) -> None:
         return
     hook, payoff, mid = secs[0], body[-1], body[len(body) // 2]
     need_hook = not _LOOP_RE.search(hook["narration"])
-    need_mid = not _REMIND_RE.search(mid["narration"])
+    # one reminder anywhere in the middle half is enough (run 23: the model put its own in s7, we added another in s5)
+    need_mid = not any(_REMIND_RE.search(s["narration"]) for s in body[1:-1])
     if not (need_hook or need_mid):
         return
     user = (f"HOOK (current):\n{hook['narration']}\n\nPAYOFF SECTION — heading \"{payoff.get('heading')}\" (it is the LAST part "
@@ -524,7 +524,11 @@ def _ensure_open_loop(cfg: dict, d: dict) -> None:
     rem = " ".join(str(out.get("reminder") or "").split())
     if need_mid and 4 <= len(rem.split()) <= 22 and not _CUE_RE.search(rem):
         rem = rem.rstrip() if rem.rstrip()[-1:] in ".!?" else rem.rstrip() + "."
-        mid["narration"] = _soften(rem + " " + mid["narration"])
+        # after the section's signpost sentence(s), not before: "Number five: real estate. Almost there — the rule I
+        # promised comes at the end." reads as a person talking; the reverse order (run 23) sounded bolted on.
+        sents = re.split(r"(?<=[.!?])\s+", mid["narration"].strip())
+        cut = 2 if len(sents) > 2 and len(sents[0].split()) <= 4 else 1   # "Okay." + "Number five: real estate."
+        mid["narration"] = _soften(" ".join(sents[:cut] + [rem] + sents[cut:]))
         done.append(f"mid-video reminder ({mid.get('id')})")
     if done:
         print(f"      open loop added: {', '.join(done)}")
