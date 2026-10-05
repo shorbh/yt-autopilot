@@ -247,6 +247,7 @@ Return JSON exactly matching this schema:
             print(f"[warn] fuller draft failed ({str(e)[:100]}); keeping the previous one")
     if wc < floor_words:
         print(f"[warn] script still {wc} words (< {floor_words} floor) after retries; video will run ~{wc / WORDS_PER_MIN:.1f} min")
+    _ensure_open_loop(cfg, data)
     data["sources"] = [{"title": s.get("title", ""), "url": s.get("url", "")} for s in (pick.get("sources") or []) if s.get("url")]
     data["real_people"] = pick.get("kind") == "story"   # grounded stories: no stock faces for real people (render/storyboard)
     data["kind"] = pick.get("kind", "mechanic")
@@ -330,6 +331,36 @@ def headline(title: str) -> str:
     return t[:100]
 
 
+_TILE_MAX = 15   # chars that fit a 4x2 tile label at the floor font size (thumbnail and in-video grid)
+_TILE_ALIASES = {"CERTIFICATES OF DEPOSIT": "CDS", "CERTIFICATES OF": "CDS", "CERTIFICATES": "CDS", "CERTIFICATE OF DEPOSIT": "CDS",
+                 "INDIVIDUAL STOCKS": "STOCKS", "SINGLE STOCKS": "STOCKS", "HIGH YIELD SAVINGS": "HIGH YIELD", "HIGH-YIELD SAVINGS": "HIGH YIELD",
+                 "SAVINGS ACCOUNTS": "SAVINGS", "TREASURY BILLS": "T-BILLS", "TREASURY BONDS": "TREASURIES", "CRYPTOCURRENCY": "CRYPTO",
+                 "CRYPTOCURRENCIES": "CRYPTO", "EXCHANGE TRADED FUNDS": "ETFS", "EXCHANGE-TRADED FUNDS": "ETFS", "GOVERNMENT BONDS": "GOV BONDS",
+                 "CORPORATE BONDS": "CORP BONDS", "MONEY MARKET FUNDS": "MONEY MARKET", "PRECIOUS METALS": "GOLD & METALS",
+                 "RETIREMENT ACCOUNTS": "401(K) & IRA", "PEER TO PEER LENDING": "P2P LENDING", "PEER-TO-PEER LENDING": "P2P LENDING"}
+_TILE_HEADS = {"STOCKS", "BONDS", "FUNDS", "ETFS", "CASH", "GOLD", "CRYPTO", "SAVINGS", "ESTATE", "ANNUITIES", "OPTIONS", "FUTURES", "LENDING", "ART", "LAND"}
+
+
+def _tile_label(raw: str) -> str:
+    """1-2 word tile label that fits without a mid-word cut (run 21: 'CERTIFICATES O', 'INDIVIDUAL STO'). Known long
+    names get a short alias; otherwise keep two words if they fit, else the head noun, else the first word."""
+    words = [w for w in re.sub(r"[^A-Z0-9&()\-/ ]", "", raw.upper()).split() if w]
+    if not words:
+        return "ITEM"
+    full = " ".join(words)
+    if full in _TILE_ALIASES:
+        return _TILE_ALIASES[full]
+    two = " ".join(words[:2])
+    if two in _TILE_ALIASES:
+        return _TILE_ALIASES[two]
+    if len(two) <= _TILE_MAX:
+        return two
+    if len(words) >= 2 and words[1] in _TILE_HEADS and len(words[1]) <= _TILE_MAX:
+        return words[1]
+    first = words[0] if words else "ITEM"
+    return first[:_TILE_MAX] if len(first) <= _TILE_MAX else first[:_TILE_MAX - 1] + "."
+
+
 def _validate(d: dict, cfg: dict) -> None:
     for k in ("title", "tags", "sections", "shorts"):
         if k not in d:
@@ -372,7 +403,7 @@ def _validate(d: dict, cfg: dict) -> None:
     items = []
     for it in (th.get("items") or [])[:8]:
         if isinstance(it, dict) and it.get("label"):
-            items.append({"label": " ".join(str(it["label"]).upper().split()[:2])[:14],
+            items.append({"label": _tile_label(str(it["label"])),
                           "icon": str(it.get("icon") or "").strip().lower() or None})
     # MAP binding: each section's `covers` -> item labels; items re-ordered by first coverage so the grid, the thumbnail
     # and the narration all run in the same order. Sections without `covers` get a text match on heading + narration.
@@ -382,6 +413,7 @@ def _validate(d: dict, cfg: dict) -> None:
             cv = sec.get("covers")
             cv = [cv] if isinstance(cv, str) else (cv if isinstance(cv, list) else [])
             raw = [str(x).upper().strip() for x in cv if str(x).strip()]
+            raw += [t for t in (_tile_label(x) for x in raw) if t and t != "ITEM"]   # 'CERTIFICATES OF DEPOSIT' must hit the 'CDS' tile
             # exact label first; substring only when nothing matched exactly ('I BONDS' must not also tag 'BONDS')
             got = [l for l in labels if l in raw] or [l for l in labels if any(l in r or r in l for r in raw)]
             if not got and "covers" not in sec:   # model omitted the field: label word in heading or opening narration
@@ -427,6 +459,59 @@ def _validate(d: dict, cfg: dict) -> None:
     d["title"] = _soften(d["title"])
     d["description_body"] = _soften(d["description_body"])
     d.setdefault("chart", None)
+
+
+# ------------------------------------------------------------------ retention: the open loop (enforced, not just prompted)
+
+_LOOP_RE = re.compile(r"\b(at the end|by the end|stick around|stay (?:with me|to the end|until)|coming up|later in|"
+                      r"last one|the final (?:one|step|rule|type)|i['’]?ll show you|wait (?:for|until)|number (?:six|seven|eight|nine|[6-9]))\b", re.I)
+_REMIND_RE = re.compile(r"\b(promised|still (?:coming|ahead)|coming up|before the end|hang on|almost there|two more)\b", re.I)
+
+
+def _ensure_open_loop(cfg: dict, d: dict) -> None:
+    """Run 21: the prompt asked for an open loop in the hook and a mid-video reminder; the model wrote neither.
+    Check for them and, when missing, make ONE small LLM call that inserts exactly one sentence in each place.
+    Accepted only if the original sentences survive (sequence ratio), so nothing else in the hook changes."""
+    import difflib
+    secs = d.get("sections") or []
+    body = [s for s in secs if s.get("id") not in ("hook", "close")]
+    if len(body) < 3 or secs[0].get("id") != "hook":
+        return
+    hook, payoff, mid = secs[0], body[-1], body[len(body) // 2]
+    need_hook = not _LOOP_RE.search(hook["narration"])
+    need_mid = not _REMIND_RE.search(mid["narration"])
+    if not (need_hook or need_mid):
+        return
+    user = (f"HOOK (current):\n{hook['narration']}\n\nPAYOFF SECTION — heading \"{payoff.get('heading')}\" (it is the LAST part "
+            f"before the sign-off, {len(body)} parts in):\n{payoff['narration'][:600]}\n\nMIDDLE SECTION (current opening):\n"
+            f"{mid['narration'][:300]}\n\nReturn JSON {{\"hook\": \"...\", \"reminder\": \"...\"}}.\n"
+            f"- hook: the HOOK text unchanged, plus ONE new sentence (<= 22 words) inserted right before its final roadmap "
+            f"sentence(s), promising the payoff and saying where it is, e.g. \"And at the end, the one rule that tells you where "
+            f"your first $100 goes.\" / \"Stick around for number {len(body)} — it is the one almost everyone gets backwards.\" "
+            f"Copy every other word exactly.\n"
+            f"- reminder: ONE sentence (<= 16 words) to open the middle section, telling the viewer the promised payoff is still "
+            f"ahead, e.g. \"Halfway there — the rule I promised comes right after these.\" Plain spoken English, no markdown.")
+    try:
+        out = ask_json(cfg, "You edit a spoken finance script for retention. Return ONLY the JSON asked for.", user, temperature=0.4)
+    except Exception as e:  # noqa: BLE001 - a missing tease is not worth failing the run
+        print(f"[warn] open-loop pass failed ({str(e)[:100]})")
+        return
+    done = []
+    new_hook = " ".join(str(out.get("hook") or "").split())
+    if need_hook and new_hook and _LOOP_RE.search(new_hook):
+        ratio = difflib.SequenceMatcher(None, hook["narration"].split(), new_hook.split(), autojunk=False).ratio()
+        if ratio >= 0.7 and len(new_hook.split()) <= len(hook["narration"].split()) + 30:
+            hook["narration"] = _soften(new_hook)
+            done.append("hook open loop")
+    rem = " ".join(str(out.get("reminder") or "").split())
+    if need_mid and 4 <= len(rem.split()) <= 22 and not _CUE_RE.search(rem):
+        rem = rem.rstrip() if rem.rstrip()[-1:] in ".!?" else rem.rstrip() + "."
+        mid["narration"] = _soften(rem + " " + mid["narration"])
+        done.append(f"mid-video reminder ({mid.get('id')})")
+    if done:
+        print(f"      open loop added: {', '.join(done)}")
+    elif need_hook:
+        print("[warn] open loop: hook rewrite rejected (changed too much); keeping the original hook")
 
 
 # Metaphors that read badly on a money channel and trip YouTube's wellbeing classifiers (run 20 Short: "financial suicide").

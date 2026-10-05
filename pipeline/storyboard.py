@@ -204,6 +204,16 @@ def _diversify(beats: list[dict], first_is_hook: bool = False) -> list[dict]:
             want = (2 * k + 1) if t_cap == "icon_text" else (0 if t_cap in ("photo_text", "footage_text") else k % 2)
             b["visual"] = _keyword_visual(b["text"], want)
             k += 1
+    # 6. two consecutive bignumbers that say the same thing ("$399,792" then "$400,000", same label — run 21) read as
+    #    a stutter; the second becomes a keyword image card so the number lands once.
+    for i in range(1, len(beats)):
+        a, b = beats[i - 1]["visual"], beats[i]["visual"]
+        if a.get("type") == b.get("type") == "bignumber":
+            la, lb = str(a.get("label", "")).lower().split(), str(b.get("label", "")).lower().split()
+            same_label = la and lb and len(set(la) & set(lb)) >= max(1 if min(len(la), len(lb)) == 1 else 2, min(len(la), len(lb)) - 1)
+            if same_label or str(a.get("value")) == str(b.get("value")):
+                beats[i]["visual"] = _keyword_visual(beats[i]["text"], k)
+                k += 1
     # 4. never three cards of the SAME layout in a row (run #7: five bignumbers back to back). The third
     #    becomes a keyword image card; chart/broll/character/compare are left alone (they carry their own imagery).
     for i in range(2, len(beats)):

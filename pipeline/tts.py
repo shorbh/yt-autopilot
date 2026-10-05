@@ -132,7 +132,61 @@ def _groq_align(mp3: Path, text: str) -> list[dict]:
     except Exception as e:  # noqa: BLE001
         print(f"[warn] Groq Whisper failed ({str(e)[:100]}) — this part uses estimated timings")
         return []
-    return _distribute(segs, text)
+    return _align_words(segs, text)
+
+
+def _norm_tok(t: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(t).lower())
+
+
+def _align_words(segs: list[dict], text: str) -> list[dict]:
+    """Word-level transcript (Whisper) -> our tokens by SEQUENCE ALIGNMENT, not by character share. Run 21 used the
+    proportional mapping and captions drifted inside every section (each transcript difference accumulated until the
+    next section reset). Matched words take Whisper's timestamps directly; unmatched runs (numbers heard differently,
+    dropped words) are spread between their anchors."""
+    import difflib
+    toks = _TAG_RE.sub("", text).split()
+    if not segs or not toks:
+        return []
+    a = [_norm_tok(t) for t in toks]
+    b = [_norm_tok(s["text"]) for s in segs]
+    sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    anchor: list[tuple[float, float] | None] = [None] * len(toks)
+    for i, j, n in sm.get_matching_blocks():
+        for k in range(n):
+            if a[i + k]:
+                anchor[i + k] = (float(segs[j + k]["start"]), float(segs[j + k]["end"]))
+    if sum(1 for x in anchor if x) < 0.5 * len(toks):
+        return _distribute(segs, text)   # transcript too different (wrong language? music?) -> proportional fallback
+    words: list[dict] = []
+    t0, t1 = float(segs[0]["start"]), float(segs[-1]["end"])
+    i = 0
+    while i < len(toks):
+        if anchor[i]:
+            words.append({"start": anchor[i][0], "end": anchor[i][1], "text": toks[i]})
+            i += 1
+            continue
+        j = i
+        while j < len(toks) and not anchor[j]:
+            j += 1
+        lo = words[-1]["end"] if words else t0
+        hi = anchor[j][0] if j < len(toks) else t1
+        if hi < lo + 0.12 * (j - i):          # anchors too tight for the words between: give each a little time anyway
+            hi = lo + 0.22 * (j - i)
+        chunk = toks[i:j]
+        total = float(sum(len(t) + 1 for t in chunk))
+        acc = lo
+        for t in chunk:
+            d = (hi - lo) * (len(t) + 1) / total
+            words.append({"start": acc, "end": acc + d, "text": t})
+            acc += d
+        i = j
+    for k in range(1, len(words)):   # keep the sequence monotonic for the karaoke k-times
+        if words[k]["start"] < words[k - 1]["start"] + 0.01:
+            words[k]["start"] = words[k - 1]["start"] + 0.01
+        if words[k]["end"] < words[k]["start"] + 0.05:
+            words[k]["end"] = words[k]["start"] + 0.05
+    return words
 
 
 def _distribute(segs: list[dict], text: str) -> list[dict]:
