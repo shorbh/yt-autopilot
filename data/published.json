@@ -208,5 +208,59 @@
     "format": "history lesson: where this rule/product came from, what changed, what it means for you now",
     "parent": "7X58K8Kax-U",
     "recorded_at": "2026-10-01T11:59:38.976354+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "BAehST1SdTs",
+    "title": "Every Type of Debt Explained for Beginners",
+    "topic": "Every type of debt explained, ranked by how dangerous it is",
+    "category": "big_life_money",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "duration": 528.881,
+    "source": "map",
+    "headline": "",
+    "query": "",
+    "topic_kind": "map",
+    "recorded_at": "2026-10-05T13:00:33.674376+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "cSQy0jIqWZo",
+    "title": "Credit cards charge 29% interest",
+    "topic": "Every type of debt explained, ranked by how dangerous it is",
+    "category": "big_life_money",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "BAehST1SdTs",
+    "recorded_at": "2026-10-05T13:00:37.610601+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "p-IA1PuMnTs",
+    "title": "Payday loans reach four 100% APR",
+    "topic": "Every type of debt explained, ranked by how dangerous it is",
+    "category": "big_life_money",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "BAehST1SdTs",
+    "recorded_at": "2026-10-05T13:00:40.142418+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "yZ39kJ3WykQ",
+    "title": "A 6% mortgage doubles your home cost",
+    "topic": "Every type of debt explained, ranked by how dangerous it is",
+    "category": "big_life_money",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "BAehST1SdTs",
+    "recorded_at": "2026-10-05T13:00:42.737832+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "PvTmceoioNk",
+    "title": "Tax debt incurs zero point 5% monthly",
+    "topic": "Every type of debt explained, ranked by how dangerous it is",
+    "category": "big_life_money",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "BAehST1SdTs",
+    "recorded_at": "2026-10-05T13:00:45.276819+00:00"
   }
 ]
