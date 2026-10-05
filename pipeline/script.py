@@ -22,6 +22,11 @@ Retention rules (these decide whether the algorithm recommends the video):
   within the first two sentences (YouTube indexes the transcript). The hook's number must be one the video
   itself later explains or that appears in SOURCES — never an invented statistic ("creates 80% of all wealth").
   If no sourced number fits, hook with a concrete comparison or a cost the viewer can verify instead.
+- OPEN LOOP: the hook's last sentence before the roadmap promises ONE specific payoff that arrives LATE in the video and
+  says where ("…and at the end, the one rule that tells you where your first $100 goes" / "stick around for number six —
+  it's the one almost everyone gets backwards"). The payoff must really be in that section. Around the MIDDLE section,
+  one sentence reminds the viewer the payoff is still ahead ("the rule I promised comes right after these last two").
+- Never use violent or self-harm metaphors ("financial suicide", "kill your savings"); say "a financial disaster" instead.
 - MICRO-HOOKS: every section except 'close' ends with a one-sentence forward tease that opens a
   curiosity gap ("and the second mistake costs even more", "the twist is in year three"). Never a summary.
 - TAIL: the 'close' section never says "in summary", "to recap", "that's all" or fades out. It delivers the
@@ -58,6 +63,7 @@ SCHEMA = """{
     "icon": "one Lucide icon for the topic: home | car | piggy-bank | credit-card | briefcase | receipt | landmark | graduation-cap | heart-pulse | shopping-cart | chart-line | wallet",
     "items": [{"label": "STOCKS", "icon": "chart-line"}, {"label": "BONDS", "icon": "landmark"}, {"label": "REAL ESTATE", "icon": "home"}, {"label": "CRYPTO", "icon": "coins"}],
     "map_title": "2-4 words for the bright map thumbnail, e.g. 'EVERY INVESTMENT' | 'EVERY TYPE OF FUND' | 'SAVING → INVESTING' (MAP kind only; else null)",
+    "promise": "2-3 words, the benefit only this video gives, shown as a sticker on the map thumbnail: 'WHERE TO START' | 'RANKED BY RISK' | 'SAFEST FIRST' | 'FOR $100' | 'IN 8 MINUTES' (MAP kind only; else null)",
     "query": "3-5 word stock-photo search for ONE PERSON with an expression matching the title's emotion, e.g. 'worried man glasses portrait' | 'shocked woman laptop' | 'serious businesswoman office'"
   },
   "description_hook": "1-2 sentences, <= 150 characters TOTAL, starting with the primary keyword phrase, written as a curiosity hook that extends the title (never 'In this video we...'). Numerals and symbols ($400,000, 7%), never spelled-out numbers.",
@@ -103,9 +109,11 @@ def _schema(cfg: dict, last_body: str = "s5", body_words: str = "150-220") -> st
             .replace("{body_words}", body_words).replace("{last_body}", last_body))
 
 
-# Measured on the channel: Fish at speed 0.96 + breath-group pauses lands at ~160 spoken words/min (run 10: 920 words -> 5:40).
-# Models also undershoot the word budget they are given, so ask for a little more than the floor needs.
-WORDS_PER_MIN = 160
+# Measured on the channel with Fish at speed 0.96, breath-group pauses, chapter cards and section gaps:
+#   run 10: 920 words -> 5:40 (162 wpm, few cues)      run 20: 1,444 words -> 10:12 (142 wpm, 156 cues + 10 cards)
+# With cues capped (v6.3.1) the truth sits between; 150 keeps an 8-minute target near 8-9 minutes. Models also undershoot
+# the budget they are given, so the prompt asks for slightly more than the floor needs.
+WORDS_PER_MIN = 150
 
 
 def target_minutes(cfg: dict) -> float:
@@ -390,6 +398,7 @@ def _validate(d: dict, cfg: dict) -> None:
     d["thumbnail"] = {
         "items": items,
         "map_title": " ".join(str(th.get("map_title") or "").upper().split()[:4])[:24],
+        "promise": numerals(" ".join(str(th.get("promise") or "").upper().split()[:3]))[:18],
         "hero": hero,
         "hero_label": " ".join(str(th.get("hero_label") or "").split()[:3]).strip()[:24].upper(),
         "hero_is_cost": bool(hic),
@@ -411,7 +420,29 @@ def _validate(d: dict, cfg: dict) -> None:
         s.setdefault("stat", None)
         s.setdefault("short_worthy", False)
         s.setdefault("visual_query", "finance")
+        s["narration"] = _soften(str(s.get("narration") or ""))
+    for sh in d["shorts"]:
+        sh["narration"] = _soften(str(sh.get("narration") or ""))
+        sh["hook_title"] = _soften(sh["hook_title"])
+    d["title"] = _soften(d["title"])
+    d["description_body"] = _soften(d["description_body"])
     d.setdefault("chart", None)
+
+
+# Metaphors that read badly on a money channel and trip YouTube's wellbeing classifiers (run 20 Short: "financial suicide").
+_SOFTEN = [(re.compile(r"\bfinancial suicide\b", re.I), "a financial disaster"),
+           (re.compile(r"\bcommit(s|ting|ted)? suicide\b", re.I),
+            lambda m: {"": "self-destruct", "s": "self-destructs", "ting": "self-destructing", "ted": "self-destructed"}[(m.group(1) or "").lower()]),
+           (re.compile(r"\bsuicid\w*\b", re.I), "ruinous"),
+           (re.compile(r"\bkill(s|ing|ed)? your (savings|portfolio|returns|wealth)\b", re.I),
+            lambda m: {"": "wipe out", "s": "wipes out", "ing": "wiping out", "ed": "wiped out"}[(m.group(1) or "").lower()] + " your " + m.group(2)),
+           (re.compile(r"\bblow your brains out\b", re.I), "lose your head")]
+
+
+def _soften(text: str) -> str:
+    for rx, rep in _SOFTEN:
+        text = rx.sub(rep, text)
+    return text
 
 
 # ------------------------------------------------------------------ delivery cues (Fish Audio S2 bracket syntax)
@@ -455,6 +486,40 @@ def _clean(text: str) -> str:
     return " ".join(_CUE_RE.sub(" ", str(text)).split())
 
 
+# Sentences per cue the density setting means in practice. The prompt asks for this; the model ignores it (run 20:
+# 156 cues on 14 parts at "medium" — more than one per sentence, the over-directed sound the user called robotic),
+# so the budget is enforced here.
+_SENT_PER_CUE = {"low": 4.0, "medium": 2.5, "high": 1.6}
+
+
+def _thin_cues(spoken: str, density: str) -> str:
+    """Cap the cues in one part to the density budget. Keeps, in priority order: the opening cue (sets the section's
+    energy), up to two [emphasis], up to two pauses, then mood cues spread evenly through the part. Removing cues
+    never changes the words, so the narration == stripped-spoken invariant holds."""
+    plain = _clean(spoken)
+    n_sent = max(1, len(re.findall(r"[.!?](?:\s|$)", plain)))
+    budget = max(3, round(n_sent / _SENT_PER_CUE.get(density, 2.5)))
+    cues = list(_CUE_RE.finditer(spoken))
+    if len(cues) <= budget:
+        return spoken
+    low = [m.group(0).lower() for m in cues]
+    keep = {0}
+    keep.update([i for i, c in enumerate(low) if c.startswith("[emphasis")][:2])
+    keep.update([i for i, c in enumerate(low) if c in ("(break)", "(long-break)", "(breath)", "[long-break]")][:2])
+    rest = [i for i in range(len(cues)) if i not in keep]
+    slots = budget - len(keep)
+    if slots > 0 and rest:
+        step = len(rest) / slots
+        keep.update(rest[int(j * step)] for j in range(slots))
+    out, last = [], 0
+    for i, m in enumerate(cues):
+        out.append(spoken[last:m.start()])
+        out.append(m.group(0) if i in keep else " ")   # a space, so two words never fuse when a cue between them goes
+        last = m.end()
+    out.append(spoken[last:])
+    return " ".join("".join(out).split())
+
+
 def annotate_delivery(cfg: dict, script: dict) -> int:
     """One LLM call: add Fish delivery cues to every section and Short. Writes `spoken` next to `narration`.
     A section is accepted only if stripping the cues gives back the original narration exactly — so captions,
@@ -476,17 +541,18 @@ def annotate_delivery(cfg: dict, script: dict) -> int:
     for s in secs:
         sp = by_id.get(str(s["id"]), "")
         if sp and _clean(sp) == " ".join(s["narration"].split()) and _CUE_RE.search(sp):
-            s["spoken"] = " ".join(sp.split())
+            s["spoken"] = _thin_cues(" ".join(sp.split()), density)
             accepted += 1
     by_ix = {int(x.get("index", -1)): str(x.get("spoken") or "") for x in data.get("shorts", []) if isinstance(x, dict)}
     for i, sh in enumerate(shorts):
         sp = by_ix.get(i, "")
         if sp and _clean(sp) == " ".join(sh["narration"].split()) and _CUE_RE.search(sp):
-            sh["spoken"] = " ".join(sp.split())
+            sh["spoken"] = _thin_cues(" ".join(sp.split()), density)
             accepted += 1
     total = len(secs) + len(shorts)
     cues = sum(len(_CUE_RE.findall(x.get("spoken", ""))) for x in secs + shorts)
-    print(f"      delivery cues ({density}): {accepted}/{total} parts annotated, {cues} cues" +
+    raw = sum(len(_CUE_RE.findall(str(x.get("spoken") or ""))) for x in (data.get("sections") or []) + (data.get("shorts") or []) if isinstance(x, dict))
+    print(f"      delivery cues ({density}): {accepted}/{total} parts annotated, {cues} cues kept of {raw} proposed" +
           ("" if accepted == total else " (rejected parts had altered words; they will be read plain)"))
     return accepted
 

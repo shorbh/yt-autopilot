@@ -71,8 +71,8 @@ def _fish_synth(cfg: dict, text: str, out_mp3: Path) -> list[dict]:
 def _fish_align(key: str, mp3: Path, text: str) -> list[dict]:
     """Word timings from Fish ASR segments. Words of the SPOKEN text are mapped onto the transcript's segments
     by proportional position (robust to the ASR hearing '$1,200' as 'twelve hundred dollars')."""
-    if not _fish_state["asr"]:
-        return []
+    if not _fish_state["asr"] or (env("GROQ_API_KEY") and _groq_state["ok"]):
+        return []   # Groq Whisper (free) aligns the finished section instead — see _ensure_words
     try:
         with open(mp3, "rb") as fh:
             r = requests.post(f"{_FISH}/asr", headers={"Authorization": f"Bearer {key}", "model": "transcribe-1"},
@@ -80,8 +80,9 @@ def _fish_align(key: str, mp3: Path, text: str) -> list[dict]:
                               timeout=240)
         if r.status_code in (401, 402, 403):
             _fish_state["asr"] = False   # account-level: say it once, not once per section
-            print(f"[warn] Fish ASR {r.status_code}: {r.text[:110]} — word timings off for this run (captions use estimated "
-                  f"timings). Fix: top up Fish *API* credit (separate from platform credit) at fish.audio.")
+            alt = ("captions use estimated timings. Fix: top up Fish *API* credit (separate from platform credit) or add "
+                   "GROQ_API_KEY (free Whisper alignment)")
+            print(f"[warn] Fish ASR {r.status_code}: {r.text[:110]} — {alt}")
             return []
         if r.status_code != 200:
             print(f"[warn] Fish ASR {r.status_code}: {r.text[:120]} — this section uses estimated timings")
@@ -91,6 +92,51 @@ def _fish_align(key: str, mp3: Path, text: str) -> list[dict]:
     except Exception as e:  # noqa: BLE001
         print(f"[warn] Fish ASR failed ({str(e)[:100]}) — captions will use estimated timings")
         return []
+    return _distribute(segs, text)
+
+
+_GROQ_AUDIO = "https://api.groq.com/openai/v1/audio/transcriptions"
+_groq_state = {"ok": True}
+
+
+def _groq_align(mp3: Path, text: str) -> list[dict]:
+    """Word timings from Groq's hosted Whisper (free tier: 8 audio-hours/day, word timestamps) — the $0 alternative
+    to Fish ASR, so captions stay in sync without any API credit. Each Whisper word is a segment; our spoken tokens
+    are distributed over them by character share (robust to '$1,200' being heard as 'twelve hundred dollars')."""
+    key = env("GROQ_API_KEY")
+    if not key or not _groq_state["ok"]:
+        return []
+    def _post():
+        with open(mp3, "rb") as fh:
+            return requests.post(_GROQ_AUDIO, headers={"Authorization": f"Bearer {key}"},
+                                 files={"file": (mp3.name, fh, "audio/mpeg")},
+                                 data={"model": "whisper-large-v3-turbo", "response_format": "verbose_json",
+                                       "timestamp_granularities[]": "word", "language": "en", "temperature": "0"},
+                                 timeout=240)
+    try:
+        r = _post()
+        if r.status_code == 429:
+            time.sleep(8)   # free tier: 20 requests/min; one retry is enough at 3 workers
+            r = _post()
+        if r.status_code in (401, 402, 403):
+            _groq_state["ok"] = False
+            print(f"[warn] Groq Whisper {r.status_code}: {r.text[:120]} — alignment off for this run")
+            return []
+        if r.status_code != 200:
+            print(f"[warn] Groq Whisper {r.status_code}: {r.text[:120]} — this part uses estimated timings")
+            return []
+        ws = r.json().get("words") or []
+        segs = sorted(({"text": str(w.get("word", "")).strip(), "start": float(w["start"]), "end": float(w["end"])}
+                       for w in ws if str(w.get("word", "")).strip() and float(w["end"]) > float(w["start"])),
+                      key=lambda s: s["start"])
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] Groq Whisper failed ({str(e)[:100]}) — this part uses estimated timings")
+        return []
+    return _distribute(segs, text)
+
+
+def _distribute(segs: list[dict], text: str) -> list[dict]:
+    """Map the SPOKEN text's tokens onto timed transcript segments, in proportion to each segment's character share."""
     toks = _TAG_RE.sub("", text).split()
     if not segs or not toks:
         return []
@@ -339,7 +385,7 @@ def synthesize_paced(cfg: dict, text: str, out_mp3: Path, provider: str) -> dict
     Word timings are shifted into the combined timeline. Falls back to a single synthesis on any failure."""
     groups = _groups(text)
     if len(groups) == 1:
-        return synthesize(cfg, text, out_mp3, provider=provider)
+        return _ensure_words(synthesize(cfg, text, out_mp3, provider=provider), out_mp3, text)
     parts, words, offset = [], [], 0.0
     try:
         for gi, g in enumerate(groups):
@@ -360,10 +406,22 @@ def synthesize_paced(cfg: dict, text: str, out_mp3: Path, provider: str) -> dict
         fc = ";".join(filters) + f";{joined}concat=n={len(parts)}:v=0:a=1[out]"
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *inputs, "-filter_complex", fc, "-map", "[out]",
                         "-c:a", "libmp3lame", "-q:a", "2", str(out_mp3)], check=True)
-        return {"duration": ffprobe_duration(out_mp3), "words": words, "provider": provider}
+        return _ensure_words({"duration": ffprobe_duration(out_mp3), "words": words, "provider": provider}, out_mp3, text)
     except Exception as e:  # noqa: BLE001 - never lose a video over pacing
         print(f"[warn] paced synthesis failed ({str(e)[:100]}); synthesising the section in one piece")
-        return synthesize(cfg, text, out_mp3, provider=provider)
+        return _ensure_words(synthesize(cfg, text, out_mp3, provider=provider), out_mp3, text)
+
+
+def _ensure_words(info: dict, mp3: Path, text: str) -> dict:
+    """Fish TTS has no timestamps; when Fish ASR is unavailable (no API credit) the words list comes back empty and
+    captions drift onto estimated timings (run 20: visibly out of sync). Align the finished part once with Groq
+    Whisper instead — one request per section/Short, free."""
+    if info.get("words") or info.get("provider") != "fish":
+        return info
+    words = _groq_align(mp3, text)
+    if words:
+        info = {**info, "words": words, "aligned": "groq"}
+    return info
 
 
 def synthesize_sections(cfg: dict, sections: list[dict], workdir: Path) -> list[dict]:

@@ -19,7 +19,8 @@ from pathlib import Path
 from . import assets_remote, motion, visuals
 from .config import ROOT, hex_to_rgb
 from .storyboard import _key_phrase, storyboard
-from .tts import _eleven_available, concat_audio, ffprobe_duration, provider_for, spoken_text, synthesize, synthesize_sections
+from .tts import (_ensure_words, _eleven_available, concat_audio, ffprobe_duration, provider_for, spoken_text, synthesize,
+                  synthesize_sections)
 
 GAP = 0.9             # silence between sections (audio) — mirrored in video timing. v6.1: a real threshold between topics
 CHAPTER_SECS = 1.1    # chapter title card length (audio is delayed by the same amount): long enough to register as a new topic
@@ -672,6 +673,7 @@ def build_shorts(cfg: dict, script: dict, workdir: Path) -> list[dict]:
             if prov == "elevenlabs":
                 _eleven_available(len(sh["narration"]))   # debit the second pass from the credit reservation
             info = synthesize(fast, text, mp3, provider=prov)
+        info = _ensure_words(info, mp3, text)   # Groq Whisper alignment when Fish ASR gave nothing
         return {"id": f"short_{k}", "heading": sh.get("hook_title", ""), "narration": sh["narration"],
                 "audio": str(mp3), "duration": info["duration"], "words": info["words"], "_wd": wd}
 
@@ -816,6 +818,7 @@ def _thumb_hero(cfg: dict, spec: dict, out: Path, photo: Path | None, title_text
 
 
 _MAP_BG = (255, 214, 102)          # warm yellow (brand accent2) — bright flat thumbnails are the outlier grammar
+_MAP_NAVY = (11, 16, 32)           # brand navy: the promise sticker/ribbon on the yellow thumbnail
 _MAP_TILES = [(255, 90, 95), (61, 220, 151), (80, 140, 255), (255, 150, 60), (170, 100, 255), (40, 200, 220), (255, 110, 170), (120, 200, 80)]
 
 
@@ -826,14 +829,34 @@ def _thumb_map(cfg: dict, th: dict, items: list[dict], out: Path) -> Path:
     img = Image.new("RGB", (_TW, _TH), _MAP_BG)
     d = ImageDraw.Draw(img)
     title = (th.get("map_title") or "").strip() or "EVERY TYPE EXPLAINED"
-    tf = motion._fit_font(cfg, d, title, _TW * 0.9, 118, floor=70)
-    d.text((_TW / 2, 86), title, font=tf, fill=(20, 20, 30), anchor="mm", stroke_width=3, stroke_fill=(255, 255, 255))
+    promise = (th.get("promise") or "").strip() or "WHERE TO START"   # the benefit only this video gives (user: "promise something")
     n = min(8, max(4, len(items)))
     cols = 2 if n <= 4 else (3 if n <= 6 else 4)
     rows = -(-n // cols)
+    spare = rows * cols - n            # an empty grid slot (7 items in 4x2) becomes the promise sticker
+    ribbon = bool(promise) and spare == 0  # full grid: the promise goes on a navy ribbon under the title instead
+    tf = motion._fit_font(cfg, d, title, _TW * 0.9, 100 if ribbon else 118, floor=64 if ribbon else 70)
+    d.text((_TW / 2, 64 if ribbon else 86), title, font=tf, fill=(20, 20, 30), anchor="mm", stroke_width=3, stroke_fill=(255, 255, 255))
     top, bottom, side, gap = 170, _TH - 60, 50, 22
+    if ribbon:
+        pf = motion._fit_font(cfg, d, promise, _TW * 0.6, 44, floor=30)
+        pw = d.textlength(promise, font=pf) + 56
+        d.rounded_rectangle([_TW / 2 - pw / 2, 112, _TW / 2 + pw / 2, 164], radius=26, fill=_MAP_NAVY)
+        d.text((_TW / 2, 138), promise, font=pf, fill=_MAP_BG, anchor="mm")
+        top = 182
     tw = (_TW - 2 * side - (cols - 1) * gap) // cols
     thh = (bottom - top - (rows - 1) * gap) // rows
+    if promise and spare > 0:   # sticker in the last empty slot, slightly rotated so it reads as a label, not a tile
+        from PIL import Image as _Im
+        r, c = divmod(n, cols)
+        x0, y0 = side + c * (tw + gap), top + r * (thh + gap)
+        st = _Im.new("RGBA", (tw, thh), (0, 0, 0, 0))
+        sd = ImageDraw.Draw(st)
+        sd.rounded_rectangle([6, int(thh * 0.18), tw - 6, int(thh * 0.82)], radius=22, fill=_MAP_NAVY + (255,), outline=(255, 255, 255, 255), width=4)
+        motion.draw_fit(cfg, sd, promise, (22, int(thh * 0.22), tw - 22, int(thh * 0.78)), int(thh * 0.26), _MAP_BG,
+                        floor=30, align="center", valign="middle", max_lines=2)
+        st = st.rotate(-6, resample=_Im.BICUBIC, expand=False)
+        img.paste(st, (x0, y0), st)
     for i, it in enumerate(items[:n]):
         r, c = divmod(i, cols)
         x0, y0 = side + c * (tw + gap), top + r * (thh + gap)
