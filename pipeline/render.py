@@ -494,7 +494,6 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
     outro = chapters and cfg["video"].get("outro", True)
     use_map = bool(map_items) and len(map_items) >= 4 and chapters
     card_secs = MAP_CARD_SECS if use_map else CHAPTER_SECS
-    body_sections = max(1, len(sections) - 2)          # s1..s5 carry the items; hook and close do not
     # 1) Plan every clip (cheap, sequential) ...
     jobs: list = []          # callables producing a clip path, in playback order
     offsets: list[float] = []
@@ -509,8 +508,14 @@ def _assemble(cfg: dict, sections: list[dict], w: int, h: int, workdir: Path, ou
             def _chapter(si=si, s=s):
                 c = workdir / f"chapter_{si:02d}.mp4"
                 if use_map:
-                    cur = min(len(map_items) - 1, round((si - 1) * (len(map_items) - 1) / max(1, body_sections - 1)))
-                    spec = {"items": map_items, "current": cur, "title": map_title or s["heading"]}
+                    labels = [it["label"] for it in map_items]
+                    # highlight exactly what this section explains (script `covers`); earlier sections' items are ticked.
+                    # A section covering nothing (the decision rule) shows the whole map ticked, nothing pulsing.
+                    cur = [labels.index(l) for l in (s.get("covers") or []) if l in labels]
+                    done = [labels.index(l) for prev in sections[:si] for l in (prev.get("covers") or []) if l in labels]
+                    if not any(x.get("covers") for x in sections):   # pre-v6.3 script.json: one item per section by position
+                        cur, done = [min(si - 1, len(labels) - 1)], list(range(min(si - 1, len(labels))))
+                    spec = {"items": map_items, "current": cur, "done": [i for i in done if i not in cur], "title": map_title or s["heading"]}
                     fd, n = motion.map_grid(cfg, spec, w, h, workdir / f"frames_ch{si}", variant=si)
                 else:
                     fd, n = motion.chapter_card(cfg, s["heading"], si, w, h, workdir / f"frames_ch{si}")

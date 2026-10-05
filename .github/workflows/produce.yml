@@ -18,6 +18,9 @@ on:
         type: choice
         default: auto
         options: [auto, fish, elevenlabs, edge]
+      voice_id:
+        description: "Fish voice/model id to audition for this run only (overrides config fish_reference_id)"
+        required: false
 
 permissions:
   contents: write
@@ -60,6 +63,7 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
           FORCE_TOPIC: ${{ inputs.topic }}
           VOICE_PROVIDER: ${{ inputs.voice }}   # "" or "auto" on the schedule -> config decides
+          FISH_VOICE_ID: ${{ inputs.voice_id }} # "" on the schedule -> config fish_reference_id
         run: |
           ARGS=()
           if [ "$DRY_RUN" = "true" ]; then ARGS+=(--dry-run --keep-build); fi

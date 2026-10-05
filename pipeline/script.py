@@ -19,7 +19,9 @@ at least one fully worked numeric example the viewer can reproduce. Avoid clich�
 
 Retention rules (these decide whether the algorithm recommends the video):
 - HOOK: the first sentence states the surprising number or claim; the title's main keywords are SPOKEN
-  within the first two sentences (YouTube indexes the transcript).
+  within the first two sentences (YouTube indexes the transcript). The hook's number must be one the video
+  itself later explains or that appears in SOURCES — never an invented statistic ("creates 80% of all wealth").
+  If no sourced number fits, hook with a concrete comparison or a cost the viewer can verify instead.
 - MICRO-HOOKS: every section except 'close' ends with a one-sentence forward tease that opens a
   curiosity gap ("and the second mistake costs even more", "the twist is in year three"). Never a summary.
 - TAIL: the 'close' section never says "in summary", "to recap", "that's all" or fades out. It delivers the
@@ -34,7 +36,7 @@ Retention rules (these decide whether the algorithm recommends the video):
 - Any named person keeps the same name, gender and pronouns throughout; state gender implicitly via pronouns.
 
 Write for the EAR, not the page (a synthetic voice reads this; the words must carry the feeling):
-- SIGNPOST. Every section s1..s5 OPENS with a 2-6 word spoken signpost sentence that tells the listener where we are
+- SIGNPOST. Every body section (s1, s2, …) OPENS with a 2-6 word spoken signpost sentence that tells the listener where we are
   ("Okay. Number two: bonds." / "Now the part most people skip." / "Here's where it gets interesting."). The hook
   ENDS with a one-line roadmap ("Seven types, safest first. Let's go."). The close opens with "So, the rule:" or similar.
 - LAND the point. After the key number in each section, one short sentence that says what it means in plain words,
@@ -70,13 +72,12 @@ SCHEMA = """{
       "narration": "60-90 words. State the surprising claim and the number that proves it.",
       "visual_query": "2-4 word stock-footage search (e.g. 'calculator desk')",
       "stat": {"label": "on-screen big number label", "value": "$180,000"} ,
-      "short_worthy": true
+      "short_worthy": true,
+      "covers": ["MAP videos only: the thumbnail.items labels this section explains, in order, e.g. ['CASH', 'BONDS']; [] for hook/close"]
     },
-    {"id": "s1", "heading": "...", "narration": "150-220 words", "visual_query": "...", "stat": null, "short_worthy": false},
+    {"id": "s1", "heading": "...", "narration": "{body_words} words", "visual_query": "...", "stat": null, "short_worthy": false, "covers": []},
     {"id": "s2", "...": "..."},
-    {"id": "s3", "...": "..."},
-    {"id": "s4", "...": "..."},
-    {"id": "s5", "...": "..."},
+    {"id": "...", "...": "... continue s3, s4, ... up to {last_body}"},
     {"id": "close", "heading": "...", "narration": "50-80 words: the action rule (no recap), one GENERIC forward tease that names no topic, then EXACTLY this sign-off text: {signoff}", "visual_query": "...", "stat": null, "short_worthy": false}
   ],
   "chart": {
@@ -93,11 +94,18 @@ SCHEMA = """{
 }"""
 
 
-def _schema(cfg: dict) -> str:
-    """SCHEMA with the sign-off filled in and exactly shorts.count entries shown (the model copies the example count)."""
+def _schema(cfg: dict, last_body: str = "s5", body_words: str = "150-220") -> str:
+    """SCHEMA with the sign-off filled in, exactly shorts.count entries shown (the model copies the example count),
+    and the body-section plan (s1..last_body, words per section) spelled out."""
     n = int(cfg["shorts"]["count"])
     more = "".join(',\n    {"hook_title": "...", "hook_face": "...", "narration": "...", "visual_query": "..."}' for _ in range(max(0, n - 1)))
-    return SCHEMA.replace("{signoff}", cfg["channel"]["signoff"]).replace("{more_shorts}", more)
+    return (SCHEMA.replace("{signoff}", cfg["channel"]["signoff"]).replace("{more_shorts}", more)
+            .replace("{body_words}", body_words).replace("{last_body}", last_body))
+
+
+# Measured on the channel: Fish at speed 0.96 + breath-group pauses lands at ~160 spoken words/min (run 10: 920 words -> 5:40).
+# Models also undershoot the word budget they are given, so ask for a little more than the floor needs.
+WORDS_PER_MIN = 160
 
 
 def target_minutes(cfg: dict) -> float:
@@ -109,12 +117,32 @@ def target_minutes(cfg: dict) -> float:
     return max(lo, min(hi, float(t)))
 
 
+def _section_plan(cfg: dict, pick: dict, target_words: int) -> tuple[int, str, str, str]:
+    """(body_sections, per-section word range, prose instruction, last body id). MAP videos get ONE section per item plus a
+    decision-rule section, so each chapter card / map highlight is exactly one item (run 10 packed 7 items into 5
+    sections and the progress map could not follow). Other kinds keep the classic 5 body sections."""
+    n_body, last = 5, "s5"
+    plan = "Use 7 sections total: hook, s1..s5, close."
+    if pick.get("kind") == "map":
+        n_body, last = 8, "s(N+1)"   # planning assumption: 7 items + decision rule; the model may pick 5-8 items
+        plan = ("Pick N = 5-8 items. Use ONE body section PER ITEM, in coverage order, plus ONE decision-rule section: "
+                "hook, s1..sN (each 'covers' exactly one label from thumbnail.items, which therefore has exactly N entries), "
+                "s(N+1) = the decision rule ('start here if you are X', covers []), close. With 7 items that is 10 sections. "
+                "Never put two items in one section — the on-screen progress map highlights one item per section. "
+                "Fewer items means proportionally LONGER sections: the total word count is what must hold.")
+    per = max(90, (target_words - 150) // n_body)   # hook ~80 + close ~70 come off the top
+    return n_body, f"{per}-{int(per * 1.25)}", plan, last
+
+
 def generate_script(cfg: dict, pick: dict, previous: dict | None = None) -> dict:
     """`previous` = the channel's most recent long video ({title, video_id}); the close recommends it by name
     (a verbal end-screen bridge) — the one forward link we CAN make without pre-committing next week's topic."""
     from .state import load_performance
     ch = cfg["channel"]
-    target_words = int(target_minutes(cfg) * 150)  # ~150 wpm spoken
+    minutes = target_minutes(cfg)
+    target_words = int(minutes * WORDS_PER_MIN * 1.08)   # +8%: models undershoot; the floor below is what we actually enforce
+    floor_words = int(float(cfg["video"].get("min_minutes", 7)) * WORDS_PER_MIN)
+    _, body_words, plan, last_body = _section_plan(cfg, pick, target_words)
     hints = load_performance().get("script_hints") or []
     hint_block = ("\nLESSONS FROM THIS CHANNEL'S RETENTION DATA (apply them):\n- " + "\n- ".join(hints) + "\n") if hints else ""
     news_block = ""
@@ -131,8 +159,10 @@ def generate_script(cfg: dict, pick: dict, previous: dict | None = None) -> dict
                       "coverage in the title and deliver it: 6-8 items (or 4 options, or N steps) in a sensible order, ONE "
                       "paragraph each with the ONE number that matters for it (cost, return, risk, limit, time), the same "
                       "criteria applied to every item so they are comparable, and a clear 'start here if you are X' decision at "
-                      "the end. Sections s1..s5 should each cover 1-2 items; the hook names how many items and the single most "
-                      "surprising number among them. Also return 'thumbnail.items' and 'thumbnail.map_title'.\n")
+                      "the end. ONE item per body section; the hook names how many items and the single most surprising "
+                      "number among them (a number the video itself then explains). Also return 'thumbnail.items' (IN THE ORDER THE "
+                      "VIDEO COVERS THEM) and 'thumbnail.map_title', and set each section's 'covers' to the exact item label it "
+                      "explains — the on-screen progress map highlights that item while the section plays, so they must match.\n")
     elif pick.get("kind") == "story":
         kind_block = ("\nKIND: MONEY STORY. Tell it as a narrative about the subject (the company, product, price or event): "
                       "what happened, the mechanism underneath, the numbers, and what it means for the viewer's own money. "
@@ -160,8 +190,9 @@ TOPIC: {pick['topic']}
 CATEGORY: {pick['category']}
 FORMAT TO FOLLOW: {pick['format']}{query_block}{kind_block}{news_block}{prev_block}{win_block}{source_block}
 
-Total narration length across all sections: about {target_words} words (±10%).
-Use 7 sections total: hook, s1..s5, close. Mark exactly 1-2 sections as short_worthy.
+Total narration length across all sections: about {target_words} words (±10%) — this is a {minutes:.0f}-minute video; a draft
+under {floor_words} words will be rejected. Each body section runs {body_words} words.
+{plan} Mark exactly 1-2 sections as short_worthy.
 Return exactly {cfg['shorts']['count']} Shorts in 'shorts'.
 The 'chart' must visualise the video's core worked example with 1-2 series and 4-12 points each; make the numbers consistent with the narration.
 Both chart series MUST be in the same unit and a similar magnitude (e.g. two dollar balances), never a price next to a total value — otherwise one line is flat.
@@ -180,23 +211,34 @@ itself (a loss, a contradiction or a number, <= 12 words) and 'hook_title' is th
 on frame one. No warm-up words.
 
 Return JSON exactly matching this schema:
-{_schema(cfg)}"""
+{_schema(cfg, last_body, body_words)}"""
     data = ask_json(cfg, SYSTEM, user)
     _validate(data, cfg)
-    # Length guard: models routinely undershoot (run #14: 776 words for an 8-minute target -> a 5-minute video).
-    # One corrective pass with the shortfall spelled out; keep whichever draft is closer to target.
+    # Length guard: models routinely undershoot (run #14: 776 words for an 8-minute target -> a 5-minute video; run 10:
+    # 920 words -> 5:40 against a 7-minute FLOOR). Up to two corrective passes with the shortfall spelled out per
+    # section; keep whichever draft is closest to target. The floor is a hard channel rule (watch-hours), so we spend
+    # the extra LLM calls (~$0.01) rather than ship a short video.
     wc = word_count(data)
-    if wc < 0.8 * target_words:
-        print(f"      script is {wc} words vs {target_words} target; asking for a fuller draft")
+    for attempt in range(2):
+        if wc >= max(0.9 * target_words, floor_words):
+            break
+        print(f"      script is {wc} words vs {target_words} target (floor {floor_words}); asking for a fuller draft ({attempt + 1}/2)")
+        short_secs = ", ".join(f"{s['id']} ({len(s['narration'].split())}w)" for s in data["sections"]
+                               if s.get("id") not in ("hook", "close"))
         try:
-            data2 = ask_json(cfg, SYSTEM, user + f"\n\nYOUR PREVIOUS DRAFT HAD ONLY {wc} WORDS OF NARRATION. The total must be "
-                             f"about {target_words} words: deepen each section with a second example, a step-by-step of the "
-                             f"calculation, or the common objection and its answer. Same JSON shape.")
+            data2 = ask_json(cfg, SYSTEM, user + f"\n\nYOUR PREVIOUS DRAFT HAD ONLY {wc} WORDS OF NARRATION — about "
+                             f"{wc / WORDS_PER_MIN:.1f} minutes, below the {floor_words}-word floor. Section lengths were: {short_secs}. "
+                             f"Every body section must reach {body_words} words: add a second worked example with real numbers, "
+                             f"the step-by-step of the calculation, or the common objection and its answer. Do NOT add sections "
+                             f"or pad with filler. Same JSON shape.")
             _validate(data2, cfg)
-            if abs(word_count(data2) - target_words) < abs(wc - target_words):
-                data = data2
-        except Exception as e:  # noqa: BLE001 - keep the first draft
-            print(f"[warn] second draft failed ({str(e)[:100]}); keeping the first")
+            wc2 = word_count(data2)
+            if abs(wc2 - target_words) < abs(wc - target_words):
+                data, wc = data2, wc2
+        except Exception as e:  # noqa: BLE001 - keep the better draft so far
+            print(f"[warn] fuller draft failed ({str(e)[:100]}); keeping the previous one")
+    if wc < floor_words:
+        print(f"[warn] script still {wc} words (< {floor_words} floor) after retries; video will run ~{wc / WORDS_PER_MIN:.1f} min")
     data["sources"] = [{"title": s.get("title", ""), "url": s.get("url", "")} for s in (pick.get("sources") or []) if s.get("url")]
     data["real_people"] = pick.get("kind") == "story"   # grounded stories: no stock faces for real people (render/storyboard)
     data["kind"] = pick.get("kind", "mechanic")
@@ -324,6 +366,27 @@ def _validate(d: dict, cfg: dict) -> None:
         if isinstance(it, dict) and it.get("label"):
             items.append({"label": " ".join(str(it["label"]).upper().split()[:2])[:14],
                           "icon": str(it.get("icon") or "").strip().lower() or None})
+    # MAP binding: each section's `covers` -> item labels; items re-ordered by first coverage so the grid, the thumbnail
+    # and the narration all run in the same order. Sections without `covers` get a text match on heading + narration.
+    labels = [it["label"] for it in items]
+    if items:
+        def _match(sec: dict) -> list[str]:
+            cv = sec.get("covers")
+            cv = [cv] if isinstance(cv, str) else (cv if isinstance(cv, list) else [])
+            raw = [str(x).upper().strip() for x in cv if str(x).strip()]
+            # exact label first; substring only when nothing matched exactly ('I BONDS' must not also tag 'BONDS')
+            got = [l for l in labels if l in raw] or [l for l in labels if any(l in r or r in l for r in raw)]
+            if not got and "covers" not in sec:   # model omitted the field: label word in heading or opening narration
+                text = (str(sec.get("heading", "")) + " " + str(sec.get("narration", ""))[:300]).upper()
+                got = [l for l in labels if any(w for w in re.findall(r"[A-Z]{3,}", l) if w in text)]
+            return got   # an explicit [] (e.g. the decision-rule section) stays [] -> grid shows everything ticked
+        order: list[str] = []
+        for sec in d["sections"]:
+            sec["covers"] = _match(sec) if sec.get("id") not in ("hook", "close") else []
+            for l in sec["covers"]:
+                if l not in order:
+                    order.append(l)
+        items = sorted(items, key=lambda it: order.index(it["label"]) if it["label"] in order else 99)
     d["thumbnail"] = {
         "items": items,
         "map_title": " ".join(str(th.get("map_title") or "").upper().split()[:4])[:24],

@@ -44,6 +44,10 @@ def main() -> int:
     if forced_voice and forced_voice != "auto":   # workflow_dispatch "voice" input: compare providers on the same topic
         cfg["voice"]["provider"] = forced_voice
         print(f"      voice provider forced to '{forced_voice}' for this run")
+    voice_id = (os.environ.get("FISH_VOICE_ID") or "").strip()
+    if voice_id:   # workflow_dispatch "voice_id" input: audition another Fish voice on the same topic without a config commit
+        cfg["voice"]["fish_reference_id"] = voice_id
+        print(f"      Fish voice id overridden to '{voice_id}' for this run")
 
     if not args.dry_run:  # fail in 2 s, not after a 6-minute render, when the token is dead
         from pipeline.upload import preflight

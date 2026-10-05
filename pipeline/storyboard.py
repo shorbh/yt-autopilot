@@ -112,8 +112,9 @@ MAX_BEAT_WORDS = 22   # ~9 s of speech; anything longer is split so the screen k
 
 def _key_phrase(sentence: str, max_words: int = 12) -> str:
     """Short on-screen phrase for a long sentence: the first clause if it is short enough,
-    otherwise the first few words with an ellipsis."""
-    s = sentence.strip().rstrip(".!?")
+    otherwise the first few words with an ellipsis. Numbers become numerals on screen ('7 percent' -> '7%')."""
+    from .script import numerals
+    s = numerals(sentence.strip().rstrip(".!?"))
     for sep in (", ", "; ", " — ", " - ", ": "):
         head = s.split(sep)[0]
         if 3 <= len(head.split()) <= max_words:
@@ -235,7 +236,8 @@ def _clean_visual(v: dict, sentences: list[str]) -> dict:
             return _default_visual(sentences[0])
         v["lines"] = lines
     if t == "callout":
-        v["text"] = str(v.get("text") or sentences[0])[:90]
+        from .script import numerals
+        v["text"] = numerals(str(v.get("text") or sentences[0]))[:90]
     if t == "timeline":
         items = [i for i in (v.get("items") or []) if isinstance(i, dict) and i.get("when") and i.get("what")][:6]
         if len(items) < 2:

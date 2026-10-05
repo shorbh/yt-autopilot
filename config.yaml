@@ -22,9 +22,9 @@ voice:
   order: ["fish", "elevenlabs", "edge"]
   # --- Fish Audio (FISH_API_KEY). s2.1-pro-free = production model at $0; word timings via Fish ASR ($0.36/audio hour) ---
   fish_model: "s2.1-pro-free"
-  fish_reference_id: "5c8dc6a69c0b4edfb32634db6384bf34"      # voice id from fish.audio/app/discovery (pick an English narrator); empty = Fish's default voice
+  fish_reference_id: "97afe090973a4254b6d4e6596178a37a"      # voice id from fish.audio/app/discovery. Audition another without editing: run the workflow with voice_id=<id> (FISH_VOICE_ID env override)
   fish_speed: 0.96           # a touch under 1.0: explaining, not reading. Breath-group pauses are added in tts.py (PAUSE_S)
-  fish_temperature: 0.85     # 0.7 = Fish default (steadier, flatter); ~0.9 = more intonation variety; >1.0 risks artefacts
+  fish_temperature: 0.75     # 0.7 = Fish default (steadier); 0.85 sounded "robotic" on run 10 (pitch wobble on long clauses); >1.0 risks artefacts
   fish_top_p: 0.8
   cue_density: "medium"      # low | medium | high — how often the delivery pass adds [bracket] cues. Playground test (Oct 4):
                              #   high = expressive but sometimes robotic; medium is the target; drop to low once the voice itself is expressive

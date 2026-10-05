@@ -355,7 +355,9 @@ def map_grid(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
     (scale + navy outline), finished items are dimmed, upcoming ones sit flat. Shown at every section start so
     the viewer always knows 'we are on 4 of 7' — the structure becomes visible."""
     items = [it for it in (spec.get("items") or []) if isinstance(it, dict) and it.get("label")][:8]
-    cur = int(spec.get("current", -1))
+    cur_raw = spec.get("current", -1)
+    current = set(cur_raw) if isinstance(cur_raw, (list, tuple, set)) else ({int(cur_raw)} if cur_raw is not None else set())
+    done_set = set(spec.get("done") or [])
     title = str(spec.get("title") or "")
     portrait = h > w
     n_items = len(items)
@@ -381,7 +383,7 @@ def map_grid(cfg, spec, w, h, out_dir, variant=0) -> tuple[Path, int]:
             r, c = divmod(i, cols)
             x0, y0 = side + c * (tw + gap), top + r * (th + gap)
             col = _TILE_COLS[i % len(_TILE_COLS)]
-            done, is_cur = i < cur, i == cur
+            is_cur, done = i in current, (i in done_set) and i not in current
             if done:
                 col = tuple(int(v * 0.45 + 255 * 0.55 * 0.6) for v in col)   # faded
             s = 1.0 + 0.08 * t if is_cur else 1.0
