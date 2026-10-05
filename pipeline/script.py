@@ -279,25 +279,70 @@ _ACRONYMS = {"ira", "iras", "etf", "etfs", "hsa", "apr", "apy", "hysa", "fdic", 
 _QWORDS = ("how", "why", "what", "when", "should", "is", "can", "do", "does", "which", "are", "will")
 
 
-_NUM_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-              "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100}
+_UNITS = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+          "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+          "seventeen": 17, "eighteen": 18, "nineteen": 19}
+_TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
+_SCALES = {"thousand": 1_000, "million": 1_000_000, "billion": 1_000_000_000}
+_NUMBER_PHRASE = re.compile(
+    r"\b((?:(?:" + "|".join([*_UNITS, *_TENS, "hundred", *_SCALES, "point", "and", "a", "an"]) + r")(?:[\s\-]+|$))+)"
+    r"(percent|dollars?|bucks)\b", re.I)
+
+
+def _spoken_number(phrase: str) -> tuple[int, str | None] | None:
+    """'four hundred' -> (400, None); 'zero point five' -> (0, '5'); 'two hundred fifty thousand' -> (250000, None).
+    None when the words don't form a number (so the caller leaves the text alone)."""
+    toks = [w for w in re.split(r"[\s\-]+", phrase.lower().strip()) if w]
+    frac = None
+    if "point" in toks:
+        i = toks.index("point")
+        toks, frac_words = toks[:i], toks[i + 1:]
+        if not frac_words or any(w not in _UNITS for w in frac_words):
+            return None
+        frac = "".join(str(_UNITS[w]) for w in frac_words)
+    total, cur, seen = 0, 0, False
+    for w in toks:
+        if w in ("and",):
+            continue
+        if w in ("a", "an"):
+            cur = cur or 1
+        elif w in _UNITS:
+            cur += _UNITS[w]; seen = True
+        elif w in _TENS:
+            cur += _TENS[w]; seen = True
+        elif w == "hundred":
+            cur = (cur or 1) * 100; seen = True
+        elif w in _SCALES:
+            total += (cur or 1) * _SCALES[w]; cur = 0; seen = True
+        else:
+            return None
+    if not seen and frac is None:
+        return None
+    return total + cur, frac
 
 
 def numerals(text: str) -> str:
-    """On-screen/metadata text uses symbols: '90 percent' -> '90%', 'versus' -> 'vs', 'forty percent' -> '40%',
-    'two hundred dollars' -> '$200'. (The narration keeps spelled-out numbers for the voice; this is for titles,
-    hook cards and key facts.)"""
+    """On-screen/metadata text uses symbols: '90 percent' -> '90%', 'forty percent' -> '40%', 'four hundred percent'
+    -> '400%', 'zero point five percent' -> '0.5%', 'two hundred fifty thousand dollars' -> '$250,000', 'versus' -> 'vs'.
+    (The narration keeps spelled-out numbers for the voice; this is for titles, hook cards and key facts.)
+    Run 24 shipped 'four 100% APR' and 'zero point 5%' — the old version only knew single number words."""
     t = str(text)
-    words = "|".join(_NUM_WORDS)
-    tens = "twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
-    t = re.sub(r"\b(a|an|" + words + r") hundred (thousand )?dollars\b",
-               lambda m: f"${_NUM_WORDS.get(m.group(1).lower(), 1)}00{',000' if m.group(2) else ''}", t, flags=re.I)
-    t = re.sub(r"\b(" + tens + r")-(one|two|three|four|five|six|seven|eight|nine) percent\b",
-               lambda m: f"{_NUM_WORDS[m.group(1).lower()] + _NUM_WORDS[m.group(2).lower()]}%", t, flags=re.I)
-    t = re.sub(r"(?<!-)\b(" + words + r") percent\b", lambda m: f"{_NUM_WORDS[m.group(1).lower()]}%", t, flags=re.I)
+
+    def _sub(m: re.Match) -> str:
+        parsed = _spoken_number(m.group(1))
+        if parsed is None:
+            return m.group(0)
+        n, frac = parsed
+        unit = m.group(2).lower()
+        if unit == "percent":
+            return f"{n}{'.' + frac if frac else ''}%"
+        return f"${n:,}{'.' + frac if frac else ''}"
+    t = _NUMBER_PHRASE.sub(_sub, t)
     t = re.sub(r"(\d)\s*percent\b", r"\1%", t, flags=re.I)
     t = re.sub(r"\bversus\b", "vs", t, flags=re.I)
-    t = re.sub(r"\b(\d[\d,]*) dollars\b", r"$\1", t, flags=re.I)
+    t = re.sub(r"\b(\d[\d,]*(?:\.\d+)?) (?:dollars|bucks)\b", r"$\1", t, flags=re.I)
+    t = re.sub(r"\$(\d[\d,]*) (thousand|million|billion)\b",
+               lambda m: f"${int(m.group(1).replace(',', '')) * _SCALES[m.group(2).lower()]:,}", t, flags=re.I)
     return t
 
 
