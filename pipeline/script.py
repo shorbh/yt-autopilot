@@ -365,7 +365,12 @@ def _validate(d: dict, cfg: dict) -> None:
     for k in ("title", "tags", "sections", "shorts"):
         if k not in d:
             raise ValueError(f"Script missing key: {k}")
-    d["title"] = headline(d["title"])
+    d["sections"] = [s for s in (d["sections"] if isinstance(d["sections"], list) else [])
+                     if isinstance(s, dict) and str(s.get("narration") or "").strip()]
+    for i, s in enumerate(d["sections"]):   # ids are what the storyboard, map binding and open-loop pass key on
+        s["id"] = str(s.get("id") or ("hook" if i == 0 else "close" if i == len(d["sections"]) - 1 else f"s{i}"))
+        s.setdefault("heading", "")
+    d["title"] = headline(str(d["title"]))
     # description parts (v3.2.1). Older single-field replies are split: first sentence -> hook, rest -> body.
     hook = _clean_prose(d.get("description_hook") or "")
     body = _clean_prose(d.get("description_body") or "")
@@ -443,9 +448,22 @@ def _validate(d: dict, cfg: dict) -> None:
     d.setdefault("thumbnail_text", hero)   # older code paths / selftest still read this
     if len(d["sections"]) < 4:
         raise ValueError("Script has too few sections")
-    d["tags"] = [t[:30] for t in d["tags"]][:25]
-    d["shorts"] = d["shorts"][: cfg["shorts"]["count"]]
+    d["tags"] = [str(t)[:30] for t in (d["tags"] if isinstance(d["tags"], list) else [])][:25]
+    # run 22: the model returned the Shorts as bare strings; accept a string as the narration, drop anything else
+    shorts: list[dict] = []
+    for sh in (d["shorts"] if isinstance(d["shorts"], list) else []):
+        if isinstance(sh, dict) and str(sh.get("narration") or "").strip():
+            shorts.append(sh)
+        elif isinstance(sh, str) and len(sh.split()) >= 20:
+            shorts.append({"narration": sh.strip()})
+    if not shorts:
+        raise ValueError("Script has no usable Shorts")
+    d["shorts"] = shorts[: cfg["shorts"]["count"]]
     for sh in d["shorts"]:
+        if not sh.get("hook_title"):   # first sentence is the claim (schema rule) — use it when the model gave no title
+            first = re.split(r"(?<=[.!?])\s+", sh["narration"].strip(), 1)[0]
+            sh["hook_title"] = " ".join(first.split()[:7])
+        sh.setdefault("visual_query", d["sections"][0].get("visual_query", "finance") if isinstance(d["sections"][0], dict) else "finance")
         sh["hook_title"] = numerals(" ".join(str(sh.get("hook_title") or d["title"]).split()[:8]))[:48]
         sh["hook_face"] = str(sh.get("hook_face") or "surprised person portrait")[:40]
     for s in d["sections"]:
