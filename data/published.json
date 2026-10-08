@@ -262,5 +262,59 @@
     "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
     "parent": "BAehST1SdTs",
     "recorded_at": "2026-10-05T13:00:45.276819+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "Hgp7qOwywco",
+    "title": "Index Funds vs Mutual Funds vs ETFS vs Hedge Funds Explained",
+    "topic": "Index funds vs mutual funds vs ETFs vs hedge funds explained",
+    "category": "big_life_money",
+    "format": "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')",
+    "duration": 474.793,
+    "source": "map",
+    "headline": "",
+    "query": "",
+    "topic_kind": "map",
+    "recorded_at": "2026-10-08T12:28:53.100027+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "keJYa1jo44Q",
+    "title": "Mutual funds cost 20 times more than index",
+    "topic": "Index funds vs mutual funds vs ETFs vs hedge funds explained",
+    "category": "big_life_money",
+    "format": "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')",
+    "parent": "Hgp7qOwywco",
+    "recorded_at": "2026-10-08T12:28:56.576189+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "8_Zdp7Py4dk",
+    "title": "Hedge funds require $2,000,000 minimum",
+    "topic": "Index funds vs mutual funds vs ETFs vs hedge funds explained",
+    "category": "big_life_money",
+    "format": "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')",
+    "parent": "Hgp7qOwywco",
+    "recorded_at": "2026-10-08T12:29:00.023180+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "kWjDFuCqhRo",
+    "title": "ETFs trade all day like individual stocks",
+    "topic": "Index funds vs mutual funds vs ETFs vs hedge funds explained",
+    "category": "big_life_money",
+    "format": "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')",
+    "parent": "Hgp7qOwywco",
+    "recorded_at": "2026-10-08T12:29:03.111986+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "Zdvf5Fzsiqw",
+    "title": "Money market funds pay cash yields safely",
+    "topic": "Index funds vs mutual funds vs ETFs vs hedge funds explained",
+    "category": "big_life_money",
+    "format": "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')",
+    "parent": "Hgp7qOwywco",
+    "recorded_at": "2026-10-08T12:29:06.606194+00:00"
   }
 ]
