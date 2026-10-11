@@ -1,36 +1,38 @@
 {
   "category_scores": {
-    "big_life_money": 1.718,
-    "debt_and_credit": 1.036,
-    "income_and_career": 0.21
+    "big_life_money": 0.963,
+    "debt_and_credit": 1.123,
+    "income_and_career": 0.827
   },
   "format_scores": {
-    "case study: two fictional people make opposite choices; follow their numbers over 10-30 years": 1.718,
-    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 0.638,
-    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 1.007
+    "case study: two fictional people make opposite choices; follow their numbers over 10-30 years": 1.505,
+    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 0.959,
+    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 1.155,
+    "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with": 0.422
   },
   "kind_scores": {
-    "mechanic": 1.0
+    "mechanic": 1.145,
+    "map": 0.422
   },
-  "videos_scored": 4,
+  "videos_scored": 5,
   "retention": {
     "_arItix7pNQ": {
-      "nose": 0.64,
-      "mid": 0.24,
-      "tail": 0.16
+      "nose": 0.654,
+      "mid": 0.269,
+      "tail": 0.192
     },
     "dcRxC-9fdmg": {
-      "nose": 0.643,
-      "mid": 0.357,
-      "tail": 0.357
+      "nose": 0.619,
+      "mid": 0.381,
+      "tail": 0.381
     },
     "GZtSyKc4ht0": {
-      "nose": 0.727,
-      "mid": 0.455,
-      "tail": 0.273
+      "nose": 0.75,
+      "mid": 0.562,
+      "tail": 0.438
     }
   },
   "script_hints": [],
   "target_minutes": 8.0,
-  "updated_at": "2026-10-04T10:52:52.426154+00:00"
+  "updated_at": "2026-10-11T11:10:30.577014+00:00"
 }
