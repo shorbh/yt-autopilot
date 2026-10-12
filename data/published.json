@@ -316,5 +316,59 @@
     "format": "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')",
     "parent": "Hgp7qOwywco",
     "recorded_at": "2026-10-08T12:29:06.606194+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "jn-eUOF_Qjw",
+    "title": "Why a 7.5% Mortgage Rate Multiplies Your Lifetime Housing Costs?",
+    "topic": "Why a 7.5% Mortgage Rate Multiplies Your Lifetime Housing Costs by 2.5X",
+    "category": "big_life_money",
+    "format": "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why",
+    "duration": 545.094,
+    "source": "trend",
+    "headline": "‘Disastrous News for Borrowers’: What 6% Mortgage Rates Mean for You",
+    "query": "Why a 7.5% Mortgage Rate Multiplies Your Lifetime Housing Costs by 2.5X",
+    "topic_kind": "story",
+    "recorded_at": "2026-10-12T13:50:43.858010+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "M29NV-8C0Gw",
+    "title": "A 7.5% mortgage adds $185,000 in pure interest",
+    "topic": "Why a 7.5% Mortgage Rate Multiplies Your Lifetime Housing Costs by 2.5X",
+    "category": "big_life_money",
+    "format": "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why",
+    "parent": "jn-eUOF_Qjw",
+    "recorded_at": "2026-10-12T13:50:46.245163+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "Kyt3ByQWX-c",
+    "title": "Your first mortgage payment is mostly bank inter",
+    "topic": "Why a 7.5% Mortgage Rate Multiplies Your Lifetime Housing Costs by 2.5X",
+    "category": "big_life_money",
+    "format": "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why",
+    "parent": "jn-eUOF_Qjw",
+    "recorded_at": "2026-10-12T13:50:49.328820+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "oCXi8I952kg",
+    "title": "Refinancing later is a dangerous financial gambl",
+    "topic": "Why a 7.5% Mortgage Rate Multiplies Your Lifetime Housing Costs by 2.5X",
+    "category": "big_life_money",
+    "format": "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why",
+    "parent": "jn-eUOF_Qjw",
+    "recorded_at": "2026-10-12T13:50:51.491235+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "pFkvQ_UNdx0",
+    "title": "Lifetime interest can exceed your home purchase ",
+    "topic": "Why a 7.5% Mortgage Rate Multiplies Your Lifetime Housing Costs by 2.5X",
+    "category": "big_life_money",
+    "format": "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why",
+    "parent": "jn-eUOF_Qjw",
+    "recorded_at": "2026-10-12T13:50:54.197342+00:00"
   }
 ]
