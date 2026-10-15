@@ -370,5 +370,59 @@
     "format": "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why",
     "parent": "jn-eUOF_Qjw",
     "recorded_at": "2026-10-12T13:50:54.197342+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "Z1mEafaP-lY",
+    "title": "How Do Banks Make Money with Your Money?",
+    "topic": "how do banks make money with your money",
+    "category": "systems_and_history",
+    "format": "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example",
+    "duration": 455.792,
+    "source": "demand",
+    "headline": "",
+    "query": "how do banks make money with your money",
+    "topic_kind": "story",
+    "recorded_at": "2026-10-15T10:36:55.506382+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "xk0imfYWYq0",
+    "title": "Your bank pays you 0.01%",
+    "topic": "how do banks make money with your money",
+    "category": "systems_and_history",
+    "format": "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example",
+    "parent": "Z1mEafaP-lY",
+    "recorded_at": "2026-10-15T10:36:59.055510+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "jAaQxJleLK4",
+    "title": "Banks lend money they don't have",
+    "topic": "how do banks make money with your money",
+    "category": "systems_and_history",
+    "format": "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example",
+    "parent": "Z1mEafaP-lY",
+    "recorded_at": "2026-10-15T10:37:02.578492+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "55g0SyJy5Nc",
+    "title": "Overdraft fees make billions",
+    "topic": "how do banks make money with your money",
+    "category": "systems_and_history",
+    "format": "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example",
+    "parent": "Z1mEafaP-lY",
+    "recorded_at": "2026-10-15T10:37:05.521669+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "fPsvmUkSTXI",
+    "title": "Rate hikes destroy bank bonds",
+    "topic": "how do banks make money with your money",
+    "category": "systems_and_history",
+    "format": "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example",
+    "parent": "Z1mEafaP-lY",
+    "recorded_at": "2026-10-15T10:37:08.137807+00:00"
   }
 ]
