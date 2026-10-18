@@ -1,7 +1,7 @@
-# Weekly channel review — 2026-10-11
+# Weekly channel review — 2026-10-18
 
-**Watch hours (365d):** 4.6  →  3995 h to YPP threshold
-**Net subs (365d):** 2   **Views:** 470
+**Watch hours (365d):** 5.1  →  3995 h to YPP threshold
+**Net subs (365d):** 2   **Views:** 608
 
 ## Top videos (28d)
 
@@ -12,26 +12,27 @@
 | Why A Seven Percent Mortgage Costs Two Hundred Gra | 51 | 34% | 0 |
 | The 7% Mortgage Trap | 50 | 68% | 1 |
 | Month 1 Mortgage Math | 35 | 130% | 0 |
-| Why Credit Card Interest Daily Compounding Costs Y | 22 | 43% | 0 |
-| The Authorized User Trap | 21 | 112% | 0 |
-| Authorized User Piggybacking: 5 Mistakes That Kill | 20 | 53% | 0 |
-| The mid-month payment trick | 16 | 36% | 0 |
-| A 6% mortgage doubles your home cost | 16 | 27% | 0 |
+| Mutual funds cost 20 times more than index | 35 | 88% | 0 |
+| Money market funds pay cash yields safely | 31 | 66% | 0 |
+| Why Credit Card Interest Daily Compounding Costs Y | 24 | 42% | 0 |
+| The 4% Rule: Will Your Retirement Portfolio Surviv | 23 | 32% | 0 |
+| Authorized User Piggybacking: 5 Mistakes That Kill | 22 | 53% | 0 |
 
 ## What the audience rewards
 
-- debt_and_credit: 1.12x
-- big_life_money: 0.96x
-- income_and_career: 0.83x
-- mechanic: 1.15x · map: 0.42x  (story vs mechanic)
+- debt_and_credit: 1.40x
+- income_and_career: 1.18x
+- big_life_money: 0.76x
+- mechanic: 1.44x · map: 0.47x · story: 0.29x  (story vs mechanic)
 
 ## Retention (share of viewers still watching)
 
 | Video | at 5% (nose) | at 50% | at 90% (tail) |
 |---|---|---|---|
 | Why A Seven Percent Mortgage Costs Two Hundre | 65% | 27% | 19% |
-| Why Credit Card Interest Daily Compounding Co | 62% | 38% | 38% |
+| Why Credit Card Interest Daily Compounding Co | 64% | 36% | 36% |
 | Authorized User Piggybacking: 5 Mistakes That | 75% | 56% | 44% |
+| The 4% Rule: Will Your Retirement Portfolio S | 60% | 33% | 13% |
 
 **Target length next week:** 8 min (adaptive, floor 7 / cap 12)
 
@@ -39,6 +40,6 @@
 
 | Title | Channel (subs) | Views | Ratio | Length |
 |---|---|---|---|---|
-| What $500,000 Really Looks Like in Retirement — It’s Not Wha | Uncle Frank Retirement (584) | 28,781 | 49x | 12 min |
+| Most People Retire On THIS Much | 40 North Finances (23,600) | 386,933 | 16x | 11 min |
 
-Topic bank refilled with **22** new topics.
+Topic bank refilled with **19** new topics.

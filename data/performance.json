@@ -1,20 +1,23 @@
 {
   "category_scores": {
-    "big_life_money": 0.963,
-    "debt_and_credit": 1.123,
-    "income_and_career": 0.827
+    "big_life_money": 0.758,
+    "debt_and_credit": 1.396,
+    "income_and_career": 1.178
   },
   "format_scores": {
-    "case study: two fictional people make opposite choices; follow their numbers over 10-30 years": 1.505,
-    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 0.959,
-    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 1.155,
-    "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with": 0.422
+    "case study: two fictional people make opposite choices; follow their numbers over 10-30 years": 1.794,
+    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 1.263,
+    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 1.444,
+    "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with": 0.631,
+    "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')": 0.312,
+    "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why": 0.293
   },
   "kind_scores": {
-    "mechanic": 1.145,
-    "map": 0.422
+    "mechanic": 1.441,
+    "map": 0.472,
+    "story": 0.293
   },
-  "videos_scored": 5,
+  "videos_scored": 7,
   "retention": {
     "_arItix7pNQ": {
       "nose": 0.654,
@@ -22,17 +25,22 @@
       "tail": 0.192
     },
     "dcRxC-9fdmg": {
-      "nose": 0.619,
-      "mid": 0.381,
-      "tail": 0.381
+      "nose": 0.636,
+      "mid": 0.364,
+      "tail": 0.364
     },
     "GZtSyKc4ht0": {
       "nose": 0.75,
       "mid": 0.562,
       "tail": 0.438
+    },
+    "AybAPFZv4gU": {
+      "nose": 0.6,
+      "mid": 0.333,
+      "tail": 0.133
     }
   },
   "script_hints": [],
   "target_minutes": 8.0,
-  "updated_at": "2026-10-11T11:10:30.577014+00:00"
+  "updated_at": "2026-10-18T09:18:52.817184+00:00"
 }
