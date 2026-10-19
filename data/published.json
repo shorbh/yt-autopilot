@@ -424,5 +424,59 @@
     "format": "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example",
     "parent": "Z1mEafaP-lY",
     "recorded_at": "2026-10-15T10:37:08.137807+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "eQf0v-QoJ_0",
+    "title": "Every Type of Retirement Account Explained for Beginners",
+    "topic": "Every type of retirement account explained (401k, IRA, Roth, HSA, pension)",
+    "category": "saving_and_budgeting",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "duration": 384.289,
+    "source": "map",
+    "headline": "",
+    "query": "",
+    "topic_kind": "map",
+    "recorded_at": "2026-10-19T11:30:33.698372+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "fEzG1m7jgOQ",
+    "title": "The $23,000 401k limit changes your taxes",
+    "topic": "Every type of retirement account explained (401k, IRA, Roth, HSA, pension)",
+    "category": "saving_and_budgeting",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "eQf0v-QoJ_0",
+    "recorded_at": "2026-10-19T11:30:37.813855+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "NWaCKQ5LRvY",
+    "title": "Roth IRA tax free growth beats everything",
+    "topic": "Every type of retirement account explained (401k, IRA, Roth, HSA, pension)",
+    "category": "saving_and_budgeting",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "eQf0v-QoJ_0",
+    "recorded_at": "2026-10-19T11:30:40.822719+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "SZmW7r7w3LY",
+    "title": "The HSA is the ultimate secret account",
+    "topic": "Every type of retirement account explained (401k, IRA, Roth, HSA, pension)",
+    "category": "saving_and_budgeting",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "eQf0v-QoJ_0",
+    "recorded_at": "2026-10-19T11:30:43.199023+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "ZheUjR7J-5g",
+    "title": "Always grab the employer match first",
+    "topic": "Every type of retirement account explained (401k, IRA, Roth, HSA, pension)",
+    "category": "saving_and_budgeting",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "eQf0v-QoJ_0",
+    "recorded_at": "2026-10-19T11:30:45.358505+00:00"
   }
 ]
