@@ -478,5 +478,59 @@
     "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
     "parent": "eQf0v-QoJ_0",
     "recorded_at": "2026-10-19T11:30:45.358505+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "wR7MRF4Q8ps",
+    "title": "Every Type of Investment Explained for Beginners",
+    "topic": "every type of investment explained part 2",
+    "category": "investing_basics",
+    "format": "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation",
+    "duration": 469.982,
+    "source": "demand",
+    "headline": "",
+    "query": "every type of investment explained part 2",
+    "topic_kind": "map",
+    "recorded_at": "2026-10-22T11:03:55.327950+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "bdiKAXaKBRE",
+    "title": "Cash savings lose money to inflation daily",
+    "topic": "every type of investment explained part 2",
+    "category": "investing_basics",
+    "format": "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation",
+    "parent": "wR7MRF4Q8ps",
+    "recorded_at": "2026-10-22T11:03:58.947200+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "0NKzvn2uDdc",
+    "title": "Index funds beat most active stock pickers",
+    "topic": "every type of investment explained part 2",
+    "category": "investing_basics",
+    "format": "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation",
+    "parent": "wR7MRF4Q8ps",
+    "recorded_at": "2026-10-22T11:04:01.270323+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "SGKCF6AGR5U",
+    "title": "Real estate leverage builds massive net worth",
+    "topic": "every type of investment explained part 2",
+    "category": "investing_basics",
+    "format": "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation",
+    "parent": "wR7MRF4Q8ps",
+    "recorded_at": "2026-10-22T11:04:03.944816+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "RfROJInzTcY",
+    "title": "Crypto drawdowns exceed 80% historical drops",
+    "topic": "every type of investment explained part 2",
+    "category": "investing_basics",
+    "format": "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation",
+    "parent": "wR7MRF4Q8ps",
+    "recorded_at": "2026-10-22T11:04:07.049025+00:00"
   }
 ]
