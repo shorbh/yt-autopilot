@@ -1,46 +1,41 @@
 {
   "category_scores": {
-    "big_life_money": 0.758,
-    "debt_and_credit": 1.396,
-    "income_and_career": 1.178
+    "big_life_money": 0.813,
+    "debt_and_credit": 1.959,
+    "income_and_career": 1.888,
+    "systems_and_history": 0.24,
+    "saving_and_budgeting": 0.468,
+    "investing_basics": 0.234
   },
   "format_scores": {
-    "case study: two fictional people make opposite choices; follow their numbers over 10-30 years": 1.794,
-    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 1.263,
-    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 1.444,
-    "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with": 0.631,
-    "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')": 0.312,
-    "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why": 0.293
+    "case study: two fictional people make opposite choices; follow their numbers over 10-30 years": 1.118,
+    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 1.677,
+    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 2.453,
+    "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with": 0.757,
+    "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')": 0.628,
+    "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why": 0.46,
+    "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example": 0.24,
+    "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation": 0.234
   },
   "kind_scores": {
-    "mechanic": 1.441,
-    "map": 0.472,
-    "story": 0.293
+    "mechanic": 1.731,
+    "map": 0.594,
+    "story": 0.35
   },
-  "videos_scored": 7,
+  "videos_scored": 10,
   "retention": {
-    "_arItix7pNQ": {
-      "nose": 0.654,
-      "mid": 0.269,
-      "tail": 0.192
-    },
-    "dcRxC-9fdmg": {
-      "nose": 0.636,
-      "mid": 0.364,
-      "tail": 0.364
-    },
     "GZtSyKc4ht0": {
-      "nose": 0.75,
+      "nose": 0.812,
       "mid": 0.562,
       "tail": 0.438
     },
     "AybAPFZv4gU": {
-      "nose": 0.6,
-      "mid": 0.333,
-      "tail": 0.133
+      "nose": 0.562,
+      "mid": 0.312,
+      "tail": 0.125
     }
   },
   "script_hints": [],
   "target_minutes": 8.0,
-  "updated_at": "2026-10-18T09:18:52.817184+00:00"
+  "updated_at": "2026-10-25T09:33:10.213596+00:00"
 }
