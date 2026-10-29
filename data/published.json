@@ -586,5 +586,59 @@
     "format": "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs",
     "parent": "myUYv1P74wk",
     "recorded_at": "2026-10-26T12:23:13.968732+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "FN-CUuhjPD4",
+    "title": "Fed Holds Rates Steady — What Happens to Your $10,000 Debt and Savings",
+    "topic": "How a paused Fed rate affects your variable debt and savings yield with a $10,000 calculation",
+    "category": "systems_and_history",
+    "format": "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers",
+    "duration": 547.986,
+    "source": "trend",
+    "headline": "Fed holds interest rates steady in last decision before midterms",
+    "query": "How a paused Fed rate affects your variable debt and savings yield with a $10,000 calculation",
+    "topic_kind": "story",
+    "recorded_at": "2026-10-29T11:59:51.903259+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "IQF1wqPgNKY",
+    "title": "$10,000 in variable debt costs $2,450 a year",
+    "topic": "How a paused Fed rate affects your variable debt and savings yield with a $10,000 calculation",
+    "category": "systems_and_history",
+    "format": "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers",
+    "parent": "FN-CUuhjPD4",
+    "recorded_at": "2026-10-29T11:59:54.491451+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "8axg_FA_qTo",
+    "title": "Your savings rate stops while debt compounds dai",
+    "topic": "How a paused Fed rate affects your variable debt and savings yield with a $10,000 calculation",
+    "category": "systems_and_history",
+    "format": "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers",
+    "parent": "FN-CUuhjPD4",
+    "recorded_at": "2026-10-29T11:59:56.682250+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "SWJGvN0ZvUQ",
+    "title": "Keeping savings while holding debt is a trap",
+    "topic": "How a paused Fed rate affects your variable debt and savings yield with a $10,000 calculation",
+    "category": "systems_and_history",
+    "format": "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers",
+    "parent": "FN-CUuhjPD4",
+    "recorded_at": "2026-10-29T11:59:59.534772+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "6Qgtgh2pmUk",
+    "title": "Fed rate pauses lock in your maximum borrowing",
+    "topic": "How a paused Fed rate affects your variable debt and savings yield with a $10,000 calculation",
+    "category": "systems_and_history",
+    "format": "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers",
+    "parent": "FN-CUuhjPD4",
+    "recorded_at": "2026-10-29T12:00:01.129766+00:00"
   }
 ]
