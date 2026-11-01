@@ -1,39 +1,43 @@
-# Weekly channel review — 2026-10-25
+# Weekly channel review — 2026-11-01
 
-**Watch hours (365d):** 5.4  →  3995 h to YPP threshold
-**Net subs (365d):** 2   **Views:** 745
+**Watch hours (365d):** 5.7  →  3994 h to YPP threshold
+**Net subs (365d):** 2   **Views:** 998
 
 ## Top videos (28d)
 
 | Video | Views | Avg % watched | Subs |
 |---|---|---|---|
-| The $7,000 Retirement Mistake | 80 | 70% | 0 |
+| Index funds beat most active stock pickers | 99 | 42% | 1 |
+| Real estate leverage builds massive net worth | 52 | 29% | 0 |
+| Always grab the employer match first | 51 | 66% | 0 |
+| Mutual funds cost 20 times more than index | 39 | 104% | 0 |
 | Month 1 Mortgage Math | 35 | 130% | 0 |
-| Mutual funds cost 20 times more than index | 35 | 88% | 0 |
 | Money market funds pay cash yields safely | 32 | 66% | 0 |
 | The HSA is the ultimate secret account | 26 | 22% | 0 |
-| Authorized User Piggybacking: 5 Mistakes That Kill | 25 | 55% | 0 |
-| The 4% Rule: Will Your Retirement Portfolio Surviv | 24 | 32% | 0 |
 | Roth IRA tax free growth beats everything | 21 | 42% | 0 |
+| The 4% Rule: Will Your Retirement Portfolio Surviv | 20 | 30% | 0 |
 | A 6% mortgage doubles your home cost | 20 | 31% | 0 |
-| The $23,000 401k limit changes your taxes | 18 | 58% | 0 |
 
 ## What the audience rewards
 
-- debt_and_credit: 1.96x
-- income_and_career: 1.89x
-- big_life_money: 0.81x
-- saving_and_budgeting: 0.47x
-- systems_and_history: 0.24x
-- investing_basics: 0.23x
-- mechanic: 1.73x · map: 0.59x · story: 0.35x  (story vs mechanic)
+- income_and_career: 1.96x
+- debt_and_credit: 1.49x
+- big_life_money: 0.84x
+- systems_and_history: 0.65x
+- saving_and_budgeting: 0.63x
+- investing_basics: 0.28x
+- mechanic: 1.65x · map: 0.72x · story: 0.59x  (story vs mechanic)
 
 ## Retention (share of viewers still watching)
 
 | Video | at 5% (nose) | at 50% | at 90% (tail) |
 |---|---|---|---|
-| Authorized User Piggybacking: 5 Mistakes That | 81% | 56% | 44% |
-| The 4% Rule: Will Your Retirement Portfolio S | 56% | 31% | 12% |
+| The 4% Rule: Will Your Retirement Portfolio S | 57% | 29% | 7% |
+
+## Automatic writing adjustments for next week
+
+- Recent videos lost 43% of viewers in the first seconds. Make the hook ONE short sentence with the single most surprising number, then immediately show the stakes; no context first.
+- Only 29% of viewers reach the midpoint. Move the worked example earlier (section s2 at the latest) and add a stronger forward tease at the end of s1 and s2.
 
 **Target length next week:** 8 min (adaptive, floor 7 / cap 12)
 
@@ -41,11 +45,9 @@
 
 | Title | Channel (subs) | Views | Ratio | Length |
 |---|---|---|---|---|
-| Your Life If You Start Building Wealth at 36 - What I Wish I | Mervin Finance (4,140) | 549,136 | 133x | 19 min |
-| This Is How Much You Need to Retire at 60 in Australia (I&#3 | Aussie Money With Mick (1,770) | 32,482 | 18x | 13 min |
-| Most People Retire On THIS Much | 40 North Finances (23,700) | 432,458 | 18x | 11 min |
-| How Much Money Do You NEED to Retire in Australia (Financial | ETFadviser (Australia) (8,410) | 142,129 | 17x | 11 min |
-| If I Had 12 Months to Fix My Finances, Here’s Exactly What I | Hannah Invests (5,090) | 65,953 | 13x | 19 min |
-| What Happens If You Start Investing and the Market Crashes? | Josh K. Fay  (33,700) | 366,253 | 11x | 16 min |
+| Your Life If You Start Building Wealth at 36 - What I Wish I | Mervin Finance (4,230) | 567,949 | 134x | 19 min |
+| Stop Saving For Retirement? Here&#39;s When it&#39;s Finally | Lena Armuth, CFP® (5,100) | 236,174 | 46x | 12 min |
+| Most People Retire On THIS Much | 40 North Finances (23,700) | 471,425 | 20x | 11 min |
+| Retire on $8,000 a Month? The Simple Math Most People Get Wr | DIY Retirement with Pr (3,270) | 38,895 | 12x | 12 min |
 
-Topic bank refilled with **19** new topics.
+Topic bank refilled with **13** new topics.
