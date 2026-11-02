@@ -640,5 +640,59 @@
     "format": "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers",
     "parent": "FN-CUuhjPD4",
     "recorded_at": "2026-10-29T12:00:01.129766+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "WNN8qPCa3Gk",
+    "title": "How Much You Need to Invest Every Month to Retire in 10 Years?",
+    "topic": "how much you need to invest every month to retire in 10 years",
+    "category": "investing_basics",
+    "format": "explainer: how X actually works, step by step, with one worked numeric example",
+    "duration": 467.811,
+    "source": "demand",
+    "headline": "",
+    "query": "how much you need to invest every month to retire in 10 years",
+    "topic_kind": "mechanic",
+    "recorded_at": "2026-11-02T14:07:27.215345+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "U69QUdoA71I",
+    "title": "$1,450 a month builds a $500,000 fund",
+    "topic": "how much you need to invest every month to retire in 10 years",
+    "category": "investing_basics",
+    "format": "explainer: how X actually works, step by step, with one worked numeric example",
+    "parent": "WNN8qPCa3Gk",
+    "recorded_at": "2026-11-02T14:07:30.493163+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "vL2gUWQcO70",
+    "title": "Your tenth year makes more than year one",
+    "topic": "how much you need to invest every month to retire in 10 years",
+    "category": "investing_basics",
+    "format": "explainer: how X actually works, step by step, with one worked numeric example",
+    "parent": "WNN8qPCa3Gk",
+    "recorded_at": "2026-11-02T14:07:32.419949+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "v47_rCCzcXE",
+    "title": "Why market crashes help your ten year plan",
+    "topic": "how much you need to invest every month to retire in 10 years",
+    "category": "investing_basics",
+    "format": "explainer: how X actually works, step by step, with one worked numeric example",
+    "parent": "WNN8qPCa3Gk",
+    "recorded_at": "2026-11-02T14:07:34.627774+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "eCtH8bBKDrQ",
+    "title": "The 4% rule in reverse",
+    "topic": "how much you need to invest every month to retire in 10 years",
+    "category": "investing_basics",
+    "format": "explainer: how X actually works, step by step, with one worked numeric example",
+    "parent": "WNN8qPCa3Gk",
+    "recorded_at": "2026-11-02T14:07:36.396729+00:00"
   }
 ]
