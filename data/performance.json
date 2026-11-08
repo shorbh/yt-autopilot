@@ -1,38 +1,30 @@
 {
   "category_scores": {
-    "debt_and_credit": 1.487,
-    "income_and_career": 1.961,
-    "big_life_money": 0.836,
-    "systems_and_history": 0.649,
-    "saving_and_budgeting": 0.633,
-    "investing_basics": 0.275
+    "debt_and_credit": 1.075,
+    "income_and_career": 1.798,
+    "big_life_money": 0.855,
+    "systems_and_history": 1.075,
+    "saving_and_budgeting": 1.11,
+    "investing_basics": 0.371
   },
   "format_scores": {
-    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 1.494,
-    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 1.949,
-    "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with": 0.931,
-    "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')": 0.738,
-    "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why": 0.541,
-    "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example": 0.649,
-    "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation": 0.275
+    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 1.306,
+    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 1.23,
+    "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with": 1.022,
+    "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')": 0.631,
+    "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why": 0.73,
+    "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example": 1.622,
+    "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation": 0.371,
+    "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers": 0.529
   },
   "kind_scores": {
-    "mechanic": 1.645,
-    "map": 0.719,
-    "story": 0.595
+    "mechanic": 1.268,
+    "map": 0.762,
+    "story": 0.96
   },
-  "videos_scored": 9,
-  "retention": {
-    "AybAPFZv4gU": {
-      "nose": 0.571,
-      "mid": 0.286,
-      "tail": 0.071
-    }
-  },
-  "script_hints": [
-    "Recent videos lost 43% of viewers in the first seconds. Make the hook ONE short sentence with the single most surprising number, then immediately show the stakes; no context first.",
-    "Only 29% of viewers reach the midpoint. Move the worked example earlier (section s2 at the latest) and add a stronger forward tease at the end of s1 and s2."
-  ],
+  "videos_scored": 11,
+  "retention": {},
+  "script_hints": [],
   "target_minutes": 8.0,
-  "updated_at": "2026-11-01T11:38:25.332521+00:00"
+  "updated_at": "2026-11-08T11:40:17.470389+00:00"
 }
