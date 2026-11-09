@@ -694,5 +694,59 @@
     "format": "explainer: how X actually works, step by step, with one worked numeric example",
     "parent": "WNN8qPCa3Gk",
     "recorded_at": "2026-11-02T14:07:36.396729+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "uSAkrqx-F2s",
+    "title": "IRS 2027 Tax Brackets: Your $75,000 Paycheck Shift",
+    "topic": "How the 2027 IRS tax bracket changes shift your actual take-home pay on a $75,000 salary",
+    "category": "big_life_money",
+    "format": "business story: how X actually makes its money — revenue lines, margins, who really pays; one calculation the viewer can repeat",
+    "duration": 461.566016,
+    "source": "trend",
+    "headline": "IRS announces new federal income tax brackets for 2027",
+    "query": "How the 2027 IRS tax bracket changes shift your actual take-home pay on a $75,000 salary",
+    "topic_kind": "story",
+    "recorded_at": "2026-11-09T14:34:54.690537+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "yu1A3q2hocM",
+    "title": "Your 2027 paycheck is shifting right now",
+    "topic": "How the 2027 IRS tax bracket changes shift your actual take-home pay on a $75,000 salary",
+    "category": "big_life_money",
+    "format": "business story: how X actually makes its money — revenue lines, margins, who really pays; one calculation the viewer can repeat",
+    "parent": "uSAkrqx-F2s",
+    "recorded_at": "2026-11-09T14:34:58.699595+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "AzpAzmAV7zw",
+    "title": "The SALT tax cap is now $40,000",
+    "topic": "How the 2027 IRS tax bracket changes shift your actual take-home pay on a $75,000 salary",
+    "category": "big_life_money",
+    "format": "business story: how X actually makes its money — revenue lines, margins, who really pays; one calculation the viewer can repeat",
+    "parent": "uSAkrqx-F2s",
+    "recorded_at": "2026-11-09T14:35:01.355934+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "DofsPJ1CpA0",
+    "title": "Overtime pay gets special tax relief",
+    "topic": "How the 2027 IRS tax bracket changes shift your actual take-home pay on a $75,000 salary",
+    "category": "big_life_money",
+    "format": "business story: how X actually makes its money — revenue lines, margins, who really pays; one calculation the viewer can repeat",
+    "parent": "uSAkrqx-F2s",
+    "recorded_at": "2026-11-09T14:35:04.602332+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "ul097AJ4w24",
+    "title": "Remittances face a brand-new 1% tax",
+    "topic": "How the 2027 IRS tax bracket changes shift your actual take-home pay on a $75,000 salary",
+    "category": "big_life_money",
+    "format": "business story: how X actually makes its money — revenue lines, margins, who really pays; one calculation the viewer can repeat",
+    "parent": "uSAkrqx-F2s",
+    "recorded_at": "2026-11-09T14:35:07.701384+00:00"
   }
 ]
