@@ -748,5 +748,59 @@
     "format": "business story: how X actually makes its money — revenue lines, margins, who really pays; one calculation the viewer can repeat",
     "parent": "uSAkrqx-F2s",
     "recorded_at": "2026-11-09T14:35:07.701384+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "WNkX4W_Mqn0",
+    "title": "How Do Banks Create Money from Nothing?",
+    "topic": "how do banks create money from nothing",
+    "category": "systems_and_history",
+    "format": "price story: why X costs what it costs — follow one dollar through the supply chain, with the numbers from the sources",
+    "duration": 459.6,
+    "source": "demand",
+    "headline": "",
+    "query": "how do banks create money from nothing",
+    "topic_kind": "story",
+    "recorded_at": "2026-11-12T14:16:37.036328+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "0TmnQNkiC8g",
+    "title": "$1,000 deposit creates $10,000 in bank money",
+    "topic": "how do banks create money from nothing",
+    "category": "systems_and_history",
+    "format": "price story: why X costs what it costs — follow one dollar through the supply chain, with the numbers from the sources",
+    "parent": "WNkX4W_Mqn0",
+    "recorded_at": "2026-11-12T14:16:39.703868+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "q335tcpY8Ns",
+    "title": "Banks create money every time they issue loans",
+    "topic": "how do banks create money from nothing",
+    "category": "systems_and_history",
+    "format": "price story: why X costs what it costs — follow one dollar through the supply chain, with the numbers from the sources",
+    "parent": "WNkX4W_Mqn0",
+    "recorded_at": "2026-11-12T14:16:41.826009+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "WZRlpUd2pSI",
+    "title": "The 10% reserve requirement explained simply",
+    "topic": "how do banks create money from nothing",
+    "category": "systems_and_history",
+    "format": "price story: why X costs what it costs — follow one dollar through the supply chain, with the numbers from the sources",
+    "parent": "WNkX4W_Mqn0",
+    "recorded_at": "2026-11-12T14:16:43.549738+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "6RWxWIikLro",
+    "title": "Why bank money creation causes price inflation",
+    "topic": "how do banks create money from nothing",
+    "category": "systems_and_history",
+    "format": "price story: why X costs what it costs — follow one dollar through the supply chain, with the numbers from the sources",
+    "parent": "WNkX4W_Mqn0",
+    "recorded_at": "2026-11-12T14:16:45.661380+00:00"
   }
 ]
