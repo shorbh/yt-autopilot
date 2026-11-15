@@ -1,7 +1,7 @@
-# Weekly channel review — 2026-11-08
+# Weekly channel review — 2026-11-15
 
-**Watch hours (365d):** 6.1  →  3994 h to YPP threshold
-**Net subs (365d):** 2   **Views:** 1077
+**Watch hours (365d):** 6.3  →  3994 h to YPP threshold
+**Net subs (365d):** 2   **Views:** 1100
 
 ## Top videos (28d)
 
@@ -10,23 +10,23 @@
 | Index funds beat most active stock pickers | 99 | 42% | 1 |
 | Real estate leverage builds massive net worth | 52 | 29% | 0 |
 | Always grab the employer match first | 51 | 66% | 0 |
-| Money market funds pay cash yields safely | 32 | 66% | 0 |
 | The HSA is the ultimate secret account | 26 | 22% | 0 |
-| Mutual funds cost 20 times more than index | 25 | 108% | 0 |
 | Roth IRA tax free growth beats everything | 21 | 42% | 0 |
 | $1,450 a month builds a $500,000 fund | 19 | 108% | 0 |
 | The $23,000 401k limit changes your taxes | 18 | 58% | 0 |
-| A 7.5% mortgage adds $185,000 in pure interest | 16 | 82% | 0 |
+| Cash savings lose money to inflation daily | 16 | 58% | 0 |
+| Rate hikes destroy bank bonds | 12 | 36% | 0 |
+| Banks lend money they don't have | 11 | 72% | 0 |
 
 ## What the audience rewards
 
-- income_and_career: 1.80x
-- saving_and_budgeting: 1.11x
-- debt_and_credit: 1.07x
-- systems_and_history: 1.07x
-- big_life_money: 0.85x
-- investing_basics: 0.37x
-- mechanic: 1.27x · map: 0.76x · story: 0.96x  (story vs mechanic)
+- saving_and_budgeting: 2.05x
+- debt_and_credit: 1.90x
+- systems_and_history: 1.19x
+- income_and_career: 0.66x
+- big_life_money: 0.61x
+- investing_basics: 0.58x
+- mechanic: 1.28x · map: 0.83x · story: 0.94x  (story vs mechanic)
 
 **Target length next week:** 8 min (adaptive, floor 7 / cap 12)
 
@@ -34,9 +34,8 @@
 
 | Title | Channel (subs) | Views | Ratio | Length |
 |---|---|---|---|---|
-| Your Life If You Start Building Wealth at 36 - What I Wish I | Mervin Finance (4,270) | 578,166 | 135x | 19 min |
-| How Much Does It REALLY Cost to Retire in Vietnam at 67? 🇻🇳 | Maggie in Vietnam (2,150) | 229,882 | 107x | 10 min |
-| Stop Saving For Retirement? Here&#39;s When it&#39;s Finally | Lena Armuth, CFP® (5,960) | 252,321 | 42x | 12 min |
-| Most People Retire On THIS Much | 40 North Finances (23,800) | 555,329 | 23x | 11 min |
+| Most People Retire On THIS Much | 40 North Finances (24,300) | 589,448 | 24x | 11 min |
+| This is How Much You Need in Your Pension to Retire at 57 | Hoxton Wealth (1,400) | 26,420 | 19x | 7 min |
+| Retire on $8,000 a Month? The Simple Math Most People Get Wr | DIY Retirement with Pr (3,310) | 42,004 | 13x | 12 min |
 
-Topic bank refilled with **14** new topics.
+Topic bank refilled with **16** new topics.
