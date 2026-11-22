@@ -1,30 +1,30 @@
 {
   "category_scores": {
-    "debt_and_credit": 1.895,
-    "income_and_career": 0.656,
-    "big_life_money": 0.609,
-    "systems_and_history": 1.189,
-    "saving_and_budgeting": 2.051,
-    "investing_basics": 0.585
+    "debt_and_credit": 0.959,
+    "big_life_money": 0.849,
+    "systems_and_history": 1.099,
+    "saving_and_budgeting": 1.829,
+    "investing_basics": 0.409
   },
   "format_scores": {
-    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 1.598,
-    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 0.656,
-    "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with": 1.026,
-    "map: 'The N steps from X to Y' — a path in order, each step with its trigger number ('when you have 3 months of expenses saved, move to step 4')": 0.69,
-    "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example": 1.799,
-    "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation": 0.585,
-    "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers": 0.578,
-    "business story: how X actually makes its money — revenue lines, margins, who really pays; one calculation the viewer can repeat": 0.444
+    "comparison: option A vs option B on cost, risk, time, tax; a clear decision rule at the end": 0.721,
+    "mistake autopsy: the 5 ways people get X wrong, ranked by how much money each costs": 1.449,
+    "then-and-now story: what X cost in a past decade vs today, adjusted for inflation and wages; what changed and why": 0.409,
+    "news-hook explainer: this week's event in the first sentence, then the timeless mechanism underneath with a worked example": 1.777,
+    "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with": 1.829,
+    "map: 'A vs B vs C vs D' — the same 4 criteria applied to each option (cost, risk, liquidity, tax), then a one-line decision rule per life situation": 0.409,
+    "collapse story: how X went broke — the timeline, the decision that did it, and the household-finance lesson with numbers": 0.571,
+    "business story: how X actually makes its money — revenue lines, margins, who really pays; one calculation the viewer can repeat": 0.439,
+    "price story: why X costs what it costs — follow one dollar through the supply chain, with the numbers from the sources": 0.947
   },
   "kind_scores": {
-    "mechanic": 1.284,
-    "map": 0.832,
-    "story": 0.94
+    "mechanic": 1.206,
+    "story": 0.829,
+    "map": 1.119
   },
   "videos_scored": 10,
   "retention": {},
   "script_hints": [],
   "target_minutes": 8.0,
-  "updated_at": "2026-11-15T12:27:44.873143+00:00"
+  "updated_at": "2026-11-22T13:01:59.266185+00:00"
 }
