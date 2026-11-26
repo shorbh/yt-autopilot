@@ -802,5 +802,59 @@
     "format": "price story: why X costs what it costs — follow one dollar through the supply chain, with the numbers from the sources",
     "parent": "WNkX4W_Mqn0",
     "recorded_at": "2026-11-12T14:16:45.661380+00:00"
+  },
+  {
+    "kind": "long",
+    "video_id": "k57_IrCqarA",
+    "title": "Every Type of Insurance Explained for Beginners",
+    "topic": "Every type of insurance explained and which ones you actually need",
+    "category": "money_psychology",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "duration": 479.215,
+    "source": "map",
+    "headline": "",
+    "query": "",
+    "topic_kind": "map",
+    "recorded_at": "2026-11-26T16:02:11.933504+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "ZJhDCGvLPBk",
+    "title": "Health insurance caps your yearly debt at $9,000",
+    "topic": "Every type of insurance explained and which ones you actually need",
+    "category": "money_psychology",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "k57_IrCqarA",
+    "recorded_at": "2026-11-26T16:02:16.312636+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "sWgCXMAHXug",
+    "title": "Term life insurance costs $30 a month",
+    "topic": "Every type of insurance explained and which ones you actually need",
+    "category": "money_psychology",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "k57_IrCqarA",
+    "recorded_at": "2026-11-26T16:02:18.430205+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "iAi8WZbLb5I",
+    "title": "Disability insurance replaces 60% of lost income",
+    "topic": "Every type of insurance explained and which ones you actually need",
+    "category": "money_psychology",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "k57_IrCqarA",
+    "recorded_at": "2026-11-26T16:02:21.417322+00:00"
+  },
+  {
+    "kind": "short",
+    "video_id": "FkKgnEhfPY8",
+    "title": "Umbrella insurance adds $1,000,000 in liability ",
+    "topic": "Every type of insurance explained and which ones you actually need",
+    "category": "money_psychology",
+    "format": "map: 'Every type of X explained' — 6-8 items in a sensible order, each with the ONE number that matters (cost, return, risk, limit), ending with which one a beginner should start with",
+    "parent": "k57_IrCqarA",
+    "recorded_at": "2026-11-26T16:02:24.207948+00:00"
   }
 ]
